@@ -58,3 +58,33 @@ async def test_writer_rotates_at_utc_hour_boundary(tmp_path: Path, monkeypatch) 
     h7 = (tmp_path / "transaction_2026-04-28T07.jsonl").read_text().splitlines()
     assert len(h6) == 2
     assert len(h7) == 2
+
+
+@pytest.mark.asyncio
+async def test_writer_appends_to_existing_partial_file(tmp_path: Path) -> None:
+    """A new Writer in the same hour should append, not truncate."""
+    # First writer writes 2 lines and exits.
+    w1 = Writer(channel="transaction", run_dir=tmp_path)
+    await w1.start()
+    await w1.enqueue(stamp(channel="transaction", server_ts_ms=0, raw={"i": 0}))
+    await w1.enqueue(stamp(channel="transaction", server_ts_ms=1, raw={"i": 1}))
+    await w1.close()
+
+    # Simulate a process restart by truncating the last byte (e.g. SIGKILL mid-newline).
+    files = list(tmp_path.glob("transaction_*.jsonl"))
+    assert len(files) == 1
+    path = files[0]
+    data = path.read_bytes()
+    path.write_bytes(data[:-1])  # drop trailing newline to simulate partial write
+
+    # Second writer must append more lines without losing the first ones.
+    w2 = Writer(channel="transaction", run_dir=tmp_path)
+    await w2.start()
+    await w2.enqueue(stamp(channel="transaction", server_ts_ms=2, raw={"i": 2}))
+    await w2.close()
+
+    text = path.read_text()
+    # The first line (with newline) should still be present.
+    assert '"i":0' in text
+    # The third event should be appended (after the truncated second event).
+    assert '"i":2' in text
