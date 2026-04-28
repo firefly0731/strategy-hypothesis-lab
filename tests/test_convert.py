@@ -80,3 +80,35 @@ def test_build_dataframe_myorder_extracts_status_fields() -> None:
     assert df["order_uuid"].to_list() == ["abc"]
     assert df["state"].to_list() == ["FILLED"]
     assert df["filled_qty"].to_list() == [pytest.approx(50.0)]
+
+
+def test_convert_run_writes_parquet_and_report(tmp_path: Path) -> None:
+    from observer.convert import convert_run
+
+    # Seed a JSONL with two transaction envelopes
+    jsonl = tmp_path / "transaction_2026-04-28T07.jsonl"
+    jsonl.write_text(
+        json.dumps(_envelope("transaction", {"content": {"list": [
+            {"buySellGb": "1", "contPrice": "1380.5", "contQty": "10"},
+        ]}}, recv_monotonic_ns=1)) + "\n"
+        + json.dumps(_envelope("transaction", {"content": {"list": [
+            {"buySellGb": "2", "contPrice": "1380.0", "contQty": "5"},
+        ]}}, recv_monotonic_ns=2)) + "\n"
+    )
+    # Minimal meta.json
+    (tmp_path / "meta.json").write_text(json.dumps({
+        "started_utc_ms": 0, "ended_utc_ms": 1000, "duration_planned_sec": 1,
+        "restart_count": 0, "gaps": [], "event_counts": {"transaction": 2},
+        "symbol": "USDT_KRW",
+    }))
+
+    report = convert_run(tmp_path)
+
+    parquet_path = tmp_path / "parquet" / "transaction.parquet"
+    assert parquet_path.exists()
+    df = pl.read_parquet(parquet_path)
+    assert df.shape == (2, 5)
+    assert "transaction" in report["event_counts"]
+    assert report["event_counts"]["transaction"] == 2
+    assert "quality" in report
+    assert report["quality"]["accumulated_gap_ms"] == 0

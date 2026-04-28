@@ -119,3 +119,64 @@ def build_dataframe(channel: str, envelopes: Iterable[dict]) -> pl.DataFrame:
             return pl.DataFrame({c: [] for c in cols})
         return pl.DataFrame()
     return pl.DataFrame(rows)
+
+
+CHANNELS_FOR_RUN = ("orderbookdepth", "transaction", "myOrder", "myAsset")
+
+
+def convert_run(run_dir: Path) -> dict[str, Any]:
+    """Convert all per-channel JSONLs in a run-dir into Parquet and produce a report."""
+    out_dir = run_dir / "parquet"
+    out_dir.mkdir(exist_ok=True)
+    event_counts: dict[str, int] = {}
+    for channel in CHANNELS_FOR_RUN:
+        rows: list[dict] = []
+        for jsonl in sorted(run_dir.glob(f"{channel}_*.jsonl")):
+            rows.extend(iter_jsonl_lines(jsonl))
+        df = build_dataframe(channel, rows)
+        if df.height > 0:
+            df = df.sort("recv_monotonic_ns")
+        df.write_parquet(out_dir / f"{channel}.parquet", compression="zstd")
+        event_counts[channel] = df.height
+
+    meta_path = run_dir / "meta.json"
+    meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    gaps = meta.get("gaps", [])
+    accumulated_gap_ms = sum(int(g.get("duration_ms", 0)) for g in gaps)
+    max_gap_ms = max((int(g.get("duration_ms", 0)) for g in gaps), default=0)
+    auth_failures = sum(1 for g in gaps if g.get("reason") == "auth_fail")
+
+    report = {
+        "run_dir": str(run_dir),
+        "event_counts": event_counts,
+        "quality": {
+            "accumulated_gap_ms": accumulated_gap_ms,
+            "max_gap_ms": max_gap_ms,
+            "auth_failures": auth_failures,
+            "verdict": _verdict(accumulated_gap_ms, max_gap_ms, auth_failures),
+        },
+    }
+    (run_dir / "report.json").write_text(json.dumps(report, indent=2))
+    return report
+
+
+def _verdict(accum_ms: int, max_ms: int, auth_failures: int) -> str:
+    if auth_failures > 0:
+        return "INVALID"
+    if accum_ms > 300_000 or max_ms > 120_000:
+        return "INVALID"
+    if accum_ms > 60_000 or max_ms > 30_000:
+        return "MARGINAL"
+    return "OK"
+
+
+def _cli() -> None:
+    import sys
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: python -m observer.convert <run-dir>")
+    report = convert_run(Path(sys.argv[1]))
+    print(json.dumps(report, indent=2))
+
+
+if __name__ == "__main__":
+    _cli()
