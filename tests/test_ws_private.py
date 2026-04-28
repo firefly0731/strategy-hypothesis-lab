@@ -28,6 +28,7 @@ async def test_private_ws_subscribes_and_dispatches(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_private_ws(
             url=f"ws://localhost:{port}",
+            symbol="KRW-USDT",
             api_key="ak",
             api_secret="sk",
             on_event=on_event,
@@ -74,6 +75,7 @@ async def test_private_ws_reconnects_on_drop(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_private_ws_with_reconnect(
             url=f"ws://localhost:{port}",
+            symbol="KRW-USDT",
             api_key="ak",
             api_secret="sk",
             on_event=on_event,
@@ -107,6 +109,7 @@ async def test_private_ws_aborts_on_auth_failure(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_private_ws_with_reconnect(
             url=f"ws://localhost:{port}",
+            symbol="KRW-USDT",
             api_key="ak",
             api_secret="sk",
             on_event=on_event,

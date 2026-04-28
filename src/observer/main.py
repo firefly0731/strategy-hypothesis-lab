@@ -15,7 +15,7 @@ from observer.ws_public import run_public_ws_with_reconnect
 
 PUBLIC_URL = "wss://ws-api.bithumb.com/websocket/v1"
 PRIVATE_URL = "wss://ws-api.bithumb.com/websocket/v1/private"
-CHANNELS = ("orderbookdepth", "transaction", "myOrder", "myAsset")
+CHANNELS = ("orderbook", "trade", "myOrder", "myAsset")
 
 _GLOBAL_STOP: asyncio.Event | None = None
 
@@ -95,7 +95,7 @@ async def run_capture(
     )
     private_task = asyncio.create_task(
         run_private_ws_with_reconnect(
-            url=private_url, api_key=cfg.api_key, api_secret=cfg.api_secret,
+            url=private_url, symbol=cfg.symbol, api_key=cfg.api_key, api_secret=cfg.api_secret,
             on_event=on_event_with_gap_close, stop_event=stop_event,
             on_disconnect=make_disconnect_cb("private"),
         )

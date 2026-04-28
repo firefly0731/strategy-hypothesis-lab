@@ -1,8 +1,8 @@
-"""Bithumb public WebSocket client.
+"""Bithumb public WebSocket v2 client (Upbit-compatible protocol).
 
-Subscribes to `orderbookdepth` and `transaction` channels for one symbol and
-dispatches every incoming frame to a user-supplied callback wrapped in an
-Envelope. Reconnect with backoff is layered on top in run_public_ws_with_reconnect.
+Subscribes to `orderbook` and `trade` channels for one symbol and dispatches
+every incoming frame to a user-supplied callback wrapped in an Envelope.
+Reconnect with backoff is layered on top in run_public_ws_with_reconnect.
 """
 from __future__ import annotations
 
@@ -19,16 +19,13 @@ OnEvent = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 
 def _server_ts_ms_from_payload(payload: dict[str, Any]) -> int:
-    """Best-effort extract of server timestamp.
-
-    `orderbookdepth` puts it at content.datetime (string ms).
-    `transaction` puts it at content.list[*].contDtm (string KST).
-    Falls back to 0 if absent — analysis still has recv_monotonic_ns.
-    """
-    content = payload.get("content") or {}
-    if isinstance(content.get("datetime"), str):
+    """Extract server timestamp from top-level `timestamp` field (ms-since-epoch int)."""
+    ts = payload.get("timestamp")
+    if isinstance(ts, int):
+        return ts
+    if isinstance(ts, str):
         try:
-            return int(content["datetime"])
+            return int(ts)
         except ValueError:
             return 0
     return 0
@@ -43,8 +40,13 @@ async def run_public_ws(
 ) -> None:
     """Single-attempt WS run. Returns when stop_event is set or connection closes."""
     async with websockets.connect(url, ping_interval=30) as ws:
-        await ws.send(orjson.dumps({"type": "orderbookdepth", "codes": [symbol]}).decode())
-        await ws.send(orjson.dumps({"type": "transaction", "codes": [symbol]}).decode())
+        sub = [
+            {"ticket": "observer-public"},
+            {"type": "orderbook", "codes": [symbol]},
+            {"type": "trade", "codes": [symbol]},
+            {"format": "DEFAULT"},
+        ]
+        await ws.send(orjson.dumps(sub).decode())
         async for raw_msg in ws:
             if stop_event.is_set():
                 return

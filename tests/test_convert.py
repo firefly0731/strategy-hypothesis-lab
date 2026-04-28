@@ -39,18 +39,34 @@ def _envelope(channel: str, raw: dict, *, server_ts_ms: int = 0, recv_monotonic_
     }
 
 
-def test_build_dataframe_transaction_extracts_side_price_qty() -> None:
+def test_build_dataframe_trade_extracts_side_price_qty() -> None:
     rows = [
         _envelope(
-            "transaction",
-            {"content": {"list": [
-                {"buySellGb": "1", "contPrice": "1380.5", "contQty": "10"},
-                {"buySellGb": "2", "contPrice": "1380.0", "contQty": "5.5"},
-            ]}},
+            "trade",
+            {
+                "type": "trade",
+                "code": "KRW-USDT",
+                "trade_price": 1380.5,
+                "trade_volume": 10,
+                "ask_bid": "BID",
+                "timestamp": 1777351327800,
+            },
             recv_monotonic_ns=100,
-        )
+        ),
+        _envelope(
+            "trade",
+            {
+                "type": "trade",
+                "code": "KRW-USDT",
+                "trade_price": 1380.0,
+                "trade_volume": 5.5,
+                "ask_bid": "ASK",
+                "timestamp": 1777351327900,
+            },
+            recv_monotonic_ns=200,
+        ),
     ]
-    df = build_dataframe("transaction", rows)
+    df = build_dataframe("trade", rows)
     assert df.columns == ["recv_monotonic_ns", "server_ts_ms", "side", "price", "qty"]
     assert df.shape == (2, 5)
     assert df["side"].to_list() == ["buy", "sell"]
@@ -61,54 +77,68 @@ def test_build_dataframe_myorder_extracts_status_fields() -> None:
     rows = [
         _envelope(
             "myOrder",
-            {"content": {
-                "order_id": "abc",
-                "order_status": "FILLED",
-                "order_side": "BID",
-                "price": "1380.0",
-                "quantity": "50",
-                "filled_quantity": "50",
-                "timestamp": "1714287030000",
-            }},
+            {
+                "type": "myOrder",
+                "code": "KRW-USDT",
+                "uuid": "abc-123",
+                "ask_bid": "ASK",
+                "order_type": "limit",
+                "state": "done",
+                "price": 1485,
+                "volume": 1.0,
+                "remaining_volume": 0,
+                "executed_volume": 1.0,
+                "trades_count": 1,
+                "paid_fee": 0.7425,
+                "executed_funds": 1485.0,
+                "trade_timestamp": 1777352061372,
+                "order_timestamp": 1777349944350,
+                "timestamp": 1777352061422,
+            },
             recv_monotonic_ns=200,
         ),
     ]
     df = build_dataframe("myOrder", rows)
     assert "order_uuid" in df.columns
     assert "state" in df.columns
-    assert "filled_qty" in df.columns
-    assert df["order_uuid"].to_list() == ["abc"]
-    assert df["state"].to_list() == ["FILLED"]
-    assert df["filled_qty"].to_list() == [pytest.approx(50.0)]
+    assert "executed_qty" in df.columns
+    assert df["order_uuid"].to_list() == ["abc-123"]
+    assert df["state"].to_list() == ["done"]
+    assert df["executed_qty"].to_list() == [pytest.approx(1.0)]
+    assert df["side"].to_list() == ["sell"]
 
 
 def test_convert_run_writes_parquet_and_report(tmp_path: Path) -> None:
     from observer.convert import convert_run
 
-    # Seed a JSONL with two transaction envelopes
-    jsonl = tmp_path / "transaction_2026-04-28T07.jsonl"
+    # Seed a JSONL with two trade envelopes
+    jsonl = tmp_path / "trade_2026-04-28T07.jsonl"
     jsonl.write_text(
-        json.dumps(_envelope("transaction", {"content": {"list": [
-            {"buySellGb": "1", "contPrice": "1380.5", "contQty": "10"},
-        ]}}, recv_monotonic_ns=1)) + "\n"
-        + json.dumps(_envelope("transaction", {"content": {"list": [
-            {"buySellGb": "2", "contPrice": "1380.0", "contQty": "5"},
-        ]}}, recv_monotonic_ns=2)) + "\n"
+        json.dumps(_envelope("trade", {
+            "type": "trade", "code": "KRW-USDT",
+            "trade_price": 1380.5, "trade_volume": 10, "ask_bid": "BID",
+            "timestamp": 1777351327800,
+        }, recv_monotonic_ns=1)) + "\n"
+        + json.dumps(_envelope("trade", {
+            "type": "trade", "code": "KRW-USDT",
+            "trade_price": 1380.0, "trade_volume": 5, "ask_bid": "ASK",
+            "timestamp": 1777351327900,
+        }, recv_monotonic_ns=2)) + "\n"
     )
     # Minimal meta.json
     (tmp_path / "meta.json").write_text(json.dumps({
         "started_utc_ms": 0, "ended_utc_ms": 1000, "duration_planned_sec": 1,
-        "restart_count": 0, "gaps": [], "event_counts": {"transaction": 2},
-        "symbol": "USDT_KRW",
+        "restart_count": 0, "gaps": [], "event_counts": {"trade": 2},
+        "symbol": "KRW-USDT",
     }))
 
     report = convert_run(tmp_path)
 
-    parquet_path = tmp_path / "parquet" / "transaction.parquet"
+    parquet_path = tmp_path / "parquet" / "trade.parquet"
     assert parquet_path.exists()
     df = pl.read_parquet(parquet_path)
     assert df.shape == (2, 5)
-    assert "transaction" in report["event_counts"]
-    assert report["event_counts"]["transaction"] == 2
+    assert "trade" in report["event_counts"]
+    assert report["event_counts"]["trade"] == 2
     assert "quality" in report
     assert report["quality"]["accumulated_gap_ms"] == 0

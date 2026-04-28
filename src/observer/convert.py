@@ -37,68 +37,81 @@ def _safe_float(x: Any) -> float | None:
         return None
 
 
-def _flatten_transaction(env: dict) -> list[dict]:
-    out: list[dict] = []
-    items = (env.get("raw", {}).get("content") or {}).get("list") or []
-    for item in items:
-        side_code = item.get("buySellGb")
-        side = "buy" if str(side_code) == "1" else "sell" if str(side_code) == "2" else None
+def _flatten_trade(env: dict) -> list[dict]:
+    raw = env.get("raw") or {}
+    side_code = raw.get("ask_bid")  # "ASK" or "BID"
+    side = "sell" if side_code == "ASK" else "buy" if side_code == "BID" else None
+    return [{
+        "recv_monotonic_ns": env["recv_monotonic_ns"],
+        "server_ts_ms": env["server_ts_ms"],
+        "side": side,
+        "price": _safe_float(raw.get("trade_price")),
+        "qty": _safe_float(raw.get("trade_volume")),
+    }]
+
+
+def _flatten_orderbook(env: dict) -> list[dict]:
+    """Each level pair becomes 2 rows (one bid, one ask)."""
+    raw = env.get("raw") or {}
+    out = []
+    for unit in raw.get("orderbook_units") or []:
         out.append({
             "recv_monotonic_ns": env["recv_monotonic_ns"],
             "server_ts_ms": env["server_ts_ms"],
-            "side": side,
-            "price": _safe_float(item.get("contPrice")),
-            "qty": _safe_float(item.get("contQty")),
+            "side": "ask",
+            "price": _safe_float(unit.get("ask_price")),
+            "qty": _safe_float(unit.get("ask_size")),
         })
-    return out
-
-
-def _flatten_orderbookdepth(env: dict) -> list[dict]:
-    out: list[dict] = []
-    content = env.get("raw", {}).get("content") or {}
-    items = content.get("list") or []
-    for item in items:
-        side = item.get("orderType")  # "bid" / "ask"
         out.append({
             "recv_monotonic_ns": env["recv_monotonic_ns"],
             "server_ts_ms": env["server_ts_ms"],
-            "side": side,
-            "price": _safe_float(item.get("price")),
-            "qty": _safe_float(item.get("quantity")),
-            "action": "update",  # Bithumb deltas use qty=0 to mean removal — caller can interpret
+            "side": "bid",
+            "price": _safe_float(unit.get("bid_price")),
+            "qty": _safe_float(unit.get("bid_size")),
         })
     return out
 
 
 def _flatten_my_order(env: dict) -> list[dict]:
-    c = env.get("raw", {}).get("content") or {}
+    raw = env.get("raw") or {}
+    side_code = raw.get("ask_bid")
+    side = "sell" if side_code == "ASK" else "buy" if side_code == "BID" else None
     return [{
         "recv_monotonic_ns": env["recv_monotonic_ns"],
         "server_ts_ms": env["server_ts_ms"],
-        "order_uuid": c.get("order_id"),
-        "state": c.get("order_status"),
-        "side": c.get("order_side"),
-        "price": _safe_float(c.get("price")),
-        "qty": _safe_float(c.get("quantity")),
-        "filled_qty": _safe_float(c.get("filled_quantity")),
-        "avg_fill_price": _safe_float(c.get("avg_price")),
+        "order_uuid": raw.get("uuid"),
+        "state": raw.get("state"),
+        "side": side,
+        "order_type": raw.get("order_type"),
+        "price": _safe_float(raw.get("price")),
+        "qty": _safe_float(raw.get("volume")),
+        "executed_qty": _safe_float(raw.get("executed_volume")),
+        "remaining_qty": _safe_float(raw.get("remaining_volume")),
+        "trades_count": raw.get("trades_count"),
+        "paid_fee": _safe_float(raw.get("paid_fee")),
+        "executed_funds": _safe_float(raw.get("executed_funds")),
+        "trade_timestamp": raw.get("trade_timestamp"),
+        "order_timestamp": raw.get("order_timestamp"),
     }]
 
 
 def _flatten_my_asset(env: dict) -> list[dict]:
-    c = env.get("raw", {}).get("content") or {}
-    return [{
-        "recv_monotonic_ns": env["recv_monotonic_ns"],
-        "server_ts_ms": env["server_ts_ms"],
-        "currency": c.get("currency"),
-        "balance": _safe_float(c.get("balance")),
-        "locked": _safe_float(c.get("locked")),
-    }]
+    raw = env.get("raw") or {}
+    out = []
+    for asset in raw.get("assets") or []:
+        out.append({
+            "recv_monotonic_ns": env["recv_monotonic_ns"],
+            "server_ts_ms": env["server_ts_ms"],
+            "currency": asset.get("currency"),
+            "balance": _safe_float(asset.get("balance")),
+            "locked": _safe_float(asset.get("locked")),
+        })
+    return out
 
 
 _FLATTENERS = {
-    "transaction": _flatten_transaction,
-    "orderbookdepth": _flatten_orderbookdepth,
+    "trade": _flatten_trade,
+    "orderbook": _flatten_orderbook,
     "myOrder": _flatten_my_order,
     "myAsset": _flatten_my_asset,
 }
@@ -121,7 +134,7 @@ def build_dataframe(channel: str, envelopes: Iterable[dict]) -> pl.DataFrame:
     return pl.DataFrame(rows)
 
 
-CHANNELS_FOR_RUN = ("orderbookdepth", "transaction", "myOrder", "myAsset")
+CHANNELS_FOR_RUN = ("orderbook", "trade", "myOrder", "myAsset")
 
 
 def convert_run(run_dir: Path) -> dict[str, Any]:

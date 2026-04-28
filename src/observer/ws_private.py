@@ -1,4 +1,4 @@
-"""Bithumb Private WebSocket v2 client (myOrder + myAsset)."""
+"""Bithumb Private WebSocket v2 client (myOrder + myAsset, Upbit-compatible protocol)."""
 from __future__ import annotations
 
 import asyncio
@@ -19,21 +19,22 @@ class PrivateAuthError(RuntimeError):
 
 
 def _server_ts_ms_from_payload(payload: dict[str, Any]) -> int:
-    content = payload.get("content") or {}
-    ts = content.get("timestamp") if isinstance(content, dict) else None
+    """Extract server timestamp from top-level `timestamp` field (ms-since-epoch int)."""
+    ts = payload.get("timestamp")
+    if isinstance(ts, int):
+        return ts
     if isinstance(ts, str):
         try:
             return int(ts)
         except ValueError:
             return 0
-    if isinstance(ts, int):
-        return ts
     return 0
 
 
 async def run_private_ws(
     *,
     url: str,
+    symbol: str,
     api_key: str,
     api_secret: str,
     on_event: OnEvent,
@@ -44,9 +45,9 @@ async def run_private_ws(
     try:
         async with websockets.connect(url, additional_headers=headers, ping_interval=30) as ws:
             sub = [
-                {"ticket": "observer"},
-                {"type": "myOrder"},
-                {"type": "myAsset"},
+                {"ticket": "observer-private"},
+                {"type": "myOrder", "codes": [symbol]},  # codes required for myOrder
+                {"type": "myAsset"},                      # account-wide, no codes
                 {"format": "DEFAULT"},
             ]
             await ws.send(orjson.dumps(sub).decode())  # send as text frame for mock_ws_server compat
@@ -61,15 +62,16 @@ async def run_private_ws(
                     raw=payload,
                 )
                 await on_event(channel, env)
-    except websockets.InvalidStatusCode as e:
-        if e.status_code in (401, 403):
-            raise PrivateAuthError(f"Bithumb private auth rejected: {e.status_code}") from e
+    except websockets.InvalidStatus as e:
+        if e.response.status_code in (401, 403):
+            raise PrivateAuthError(f"Bithumb private auth rejected: {e.response.status_code}") from e
         raise
 
 
 async def run_private_ws_with_reconnect(
     *,
     url: str,
+    symbol: str,
     api_key: str,
     api_secret: str,
     on_event: OnEvent,
@@ -89,6 +91,7 @@ async def run_private_ws_with_reconnect(
             backoff.mark_connected()
             await run_private_ws(
                 url=url,
+                symbol=symbol,
                 api_key=api_key,
                 api_secret=api_secret,
                 on_event=on_event,

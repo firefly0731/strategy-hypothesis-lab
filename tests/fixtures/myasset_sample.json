@@ -1,1 +1,1 @@
-{"type":"myAsset","content":{"currency":"USDT","balance":"1000.0","locked":"0.0","timestamp":"1714287030000"}}
+{"type":"myAsset","assets":[{"currency":"KRW","balance":"1000000.0","locked":"0.0"},{"currency":"USDT","balance":"100.0","locked":"0.0"}],"asset_timestamp":1777352061492,"timestamp":1777352061495,"stream_type":"REALTIME"}

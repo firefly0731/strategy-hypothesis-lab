@@ -583,6 +583,28 @@ $ # 봇 서버 로그 평소 대비 정상 (사용자 육안 확인)
 
 위 항목 중 하나라도 spec과 다르게 발견되면 spec을 patch한 뒤 구현을 진행한다.
 
+## §9.1 — Verified findings (2026-04-28 live probe)
+
+Live WS probe against real Bithumb endpoints revealed the following (all items verified ✓):
+
+| 항목 | 검증 결과 |
+|---|---|
+| Public WS URL | `wss://ws-api.bithumb.com/websocket/v1` ✓ (spec의 pubwss URL은 구버전) |
+| Private WS URL | `wss://ws-api.bithumb.com/websocket/v1/private` ✓ |
+| Public 채널 이름 | `orderbook` (not `orderbookdepth`), `trade` (not `transaction`) |
+| Private 채널 이름 | `myOrder`, `myAsset` (unchanged) |
+| 구독 메시지 형식 | 단일 JSON 배열 1회 전송 (Upbit-compatible). 채널별 별도 메시지 아님 |
+| `myOrder` codes 필터 | **필수** — `"codes": ["KRW-USDT"]` 없으면 메시지 미전달 |
+| `myAsset` codes 필터 | 불필요 (account-wide) |
+| 심볼 형식 | `KRW-USDT` (하이픈 구분, Upbit 형식). 기존 spec의 `USDT_KRW`는 v1 형식 |
+| 페이로드 구조 | Flat top-level (no `content` wrapper). `timestamp` 필드가 최상위에 ms-since-epoch int |
+| `trade` 주요 필드 | `ask_bid` (`"ASK"`/`"BID"`), `trade_price`, `trade_volume` |
+| `orderbook` 주요 필드 | `orderbook_units[].ask_price/bid_price/ask_size/bid_size` |
+| `myOrder` 주요 필드 | `uuid`, `state`, `ask_bid`, `order_type`, `volume`, `executed_volume`, `remaining_volume`, `paid_fee`, `executed_funds`, `trade_timestamp`, `order_timestamp` |
+| `myAsset` 주요 필드 | `assets[].currency/balance/locked` (배열 구조) |
+
+**영향**: `ws_public.py`, `ws_private.py`, `convert.py`, `main.py`, 모든 fixture/테스트를 v2 스키마로 재작성 완료.
+
 ## 10. 성공 기준
 
 이 sub-project가 "완료"로 판정되는 조건:
