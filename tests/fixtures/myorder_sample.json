@@ -1,0 +1,1 @@
+{"type":"myOrder","content":{"order_id":"abc-123","order_status":"FILLED","order_side":"BID","price":"1380.0","quantity":"50","filled_quantity":"50","fee":"7.5","timestamp":"1714287030000","symbol":"USDT_KRW"}}
