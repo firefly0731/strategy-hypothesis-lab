@@ -28,7 +28,7 @@ async def test_public_ws_subscribes_and_dispatches(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_public_ws(
             url=f"ws://localhost:{port}",
-            symbol="KRW-USDT",
+            symbol="KRW-XRP",
             on_event=on_event,
             stop_event=stop_event,
         )
@@ -74,7 +74,7 @@ async def test_public_ws_reconnects_after_disconnect(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_public_ws_with_reconnect(
             url=f"ws://localhost:{port}",
-            symbol="KRW-USDT",
+            symbol="KRW-XRP",
             on_event=on_event,
             stop_event=stop_event,
             backoff_start=0.05,

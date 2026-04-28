@@ -1,7 +1,7 @@
 """Runtime configuration loaded from environment.
 
 Required: BITHUMB_API_KEY, BITHUMB_API_SECRET, OBSERVER_RUN_DIR.
-Optional (with defaults): OBSERVER_DURATION_SEC=14400, OBSERVER_MAX_RESTARTS=10, OBSERVER_SYMBOL=USDT_KRW.
+Optional (with defaults): OBSERVER_DURATION_SEC=14400, OBSERVER_MAX_RESTARTS=10, OBSERVER_SYMBOL=KRW-XRP.
 """
 from __future__ import annotations
 
@@ -31,15 +31,24 @@ def _require(name: str) -> str:
     return value
 
 
+def _require_one_of(*names: str) -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value is not None and value != "":
+            return value
+    raise ConfigError(f"Missing required env var (one of): {', '.join(names)}")
+
+
 def load_config(*, use_dotenv: bool = True) -> Config:
     if use_dotenv:
         from dotenv import load_dotenv
         load_dotenv(override=False)
     return Config(
         api_key=_require("BITHUMB_API_KEY"),
-        api_secret=_require("BITHUMB_API_SECRET"),
+        # Accept either BITHUMB_API_SECRET (our convention) or BITHUMB_SECRET_KEY (Bithumb's convention).
+        api_secret=_require_one_of("BITHUMB_API_SECRET", "BITHUMB_SECRET_KEY"),
         run_dir=Path(_require("OBSERVER_RUN_DIR")),
         duration_sec=int(os.environ.get("OBSERVER_DURATION_SEC", "14400")),
         max_restarts=int(os.environ.get("OBSERVER_MAX_RESTARTS", "10")),
-        symbol=os.environ.get("OBSERVER_SYMBOL", "USDT_KRW"),
+        symbol=os.environ.get("OBSERVER_SYMBOL", "KRW-XRP"),
     )

@@ -1,4 +1,4 @@
-# Bithumb USDT/KRW Live Capture Pipeline — 가설 1 검증용
+# Bithumb XRP/KRW Live Capture Pipeline — 가설 1 검증용
 
 **Spec ID**: `2026-04-28-data-pipeline-design`
 **Sub-project**: #1 (전체 4개 중 첫 단계)
@@ -7,7 +7,7 @@
 
 ## 0. 한 줄 요약
 
-Bithumb USDT/KRW에서 4시간 동안 Public 시장 데이터(L2 호가 + 체결)와 Private 자기 주문/체결 이벤트를 시각 동기화하여 무손실로 캡처하고, 가설 1(Trade Velocity Filter)을 라이브 트레이딩 결과에 대해 반사실(counterfactual) 검증할 수 있는 데이터 파이프라인을 구축한다.
+Bithumb XRP/KRW에서 4시간 동안 Public 시장 데이터(L2 호가 + 체결)와 Private 자기 주문/체결 이벤트를 시각 동기화하여 무손실로 캡처하고, 가설 1(Trade Velocity Filter)을 라이브 트레이딩 결과에 대해 반사실(counterfactual) 검증할 수 있는 데이터 파이프라인을 구축한다.
 
 ## 1. 컨텍스트 및 동기
 
@@ -43,8 +43,8 @@ Bithumb USDT/KRW에서 4시간 동안 Public 시장 데이터(L2 호가 + 체결
 
 | ID | 요구사항 |
 |---|---|
-| F-1 | Bithumb Public WebSocket의 `orderbookdepth` 채널을 USDT_KRW 심볼로 구독, 모든 메시지 무손실 기록 |
-| F-2 | Bithumb Public WebSocket의 `transaction` 채널을 USDT_KRW 심볼로 구독, 모든 체결 이벤트 무손실 기록 |
+| F-1 | Bithumb Public WebSocket의 `orderbookdepth` 채널을 KRW-XRP 심볼로 구독, 모든 메시지 무손실 기록 |
+| F-2 | Bithumb Public WebSocket의 `transaction` 채널을 KRW-XRP 심볼로 구독, 모든 체결 이벤트 무손실 기록 |
 | F-3 | Bithumb Private WebSocket(v2)의 `myOrder` 채널 구독, 본인 모든 주문 상태 변화 기록 |
 | F-4 | Bithumb Private WebSocket(v2)의 `myAsset` 채널 구독, 본인 자산 변동 기록 |
 | F-5 | 모든 이벤트에 삼중 타임스탬프(server_ts_ms / recv_monotonic_ns / recv_utc_ms) 부착 |
@@ -60,7 +60,7 @@ Bithumb USDT/KRW에서 4시간 동안 Public 시장 데이터(L2 호가 + 체결
 |---|---|
 | 무손실 capture window | 4시간 연속 |
 | WS 재연결 후 재구독 시간 | < 5초 |
-| 디스크 사용량 (압축 전) | < 5 GB / 4h (USDT/KRW 호가 빈도 고려) |
+| 디스크 사용량 (압축 전) | < 5 GB / 4h (XRP/KRW 호가 빈도 고려) |
 | CPU 사용률 | < 10% (단일 코어) |
 | 봇에 미치는 영향 | 0 (관찰적 검증 가능: 봇 활동 메트릭 정상) |
 | 시각 동기화 정밀도 | observer 프로세스 내 monotonic_ns 단위 (네트워크 jitter 분리) |
@@ -75,7 +75,7 @@ Bithumb USDT/KRW에서 4시간 동안 Public 시장 데이터(L2 호가 + 체결
 명시적으로 본 spec에서 다루지 않는 것 (다른 sub-project 또는 향후 결정 사항):
 
 - 가설 2 (Lead-Lag Signal Filter) 검증, Binance 데이터 수집
-- USDT/KRW 외 다른 페어/거래소
+- XRP/KRW 외 다른 페어/거래소
 - 백테스트 엔진 자체 (sub-project #2)
 - 전략 모듈 / 시나리오 비교 (sub-project #3, #4)
 - Production-grade 운영 (durable queue, 메시지 큐, 24/7 모니터링) — sub-project 진척 후 별도 결정
@@ -223,7 +223,7 @@ BITHUMB_API_SECRET=your_v2_secret_here
 OBSERVER_RUN_DIR=./data
 OBSERVER_DURATION_SEC=14400      # 4시간
 OBSERVER_MAX_RESTARTS=10
-OBSERVER_SYMBOL=USDT_KRW
+OBSERVER_SYMBOL=KRW-XRP
 ```
 
 ## 6. 데이터 흐름
@@ -252,8 +252,8 @@ async def run(channels, on_event_cb, stop_event):
                 "wss://pubwss.bithumb.com/pub/ws", ping_interval=30
             ) as conn:
                 # 채널 2개 구독
-                await conn.send(orjson.dumps({"type": "orderbookdepth", "symbols": ["USDT_KRW"]}))
-                await conn.send(orjson.dumps({"type": "transaction", "symbols": ["USDT_KRW"]}))
+                await conn.send(orjson.dumps({"type": "orderbookdepth", "symbols": ["KRW-XRP"]}))
+                await conn.send(orjson.dumps({"type": "transaction", "symbols": ["KRW-XRP"]}))
                 backoff.mark_connected()
                 async for raw_msg in conn:
                     payload = orjson.loads(raw_msg)
@@ -574,7 +574,7 @@ $ # 봇 서버 로그 평소 대비 정상 (사용자 육안 확인)
 |---|---|---|
 | Public WS endpoint URL (`wss://pubwss.bithumb.com/pub/ws`) | apidocs.bithumb.com 최신 reference | 잘못되면 connect 실패 |
 | Private WS endpoint URL (`wss://ws-api.bithumb.com/websocket/v1/private`) | apidocs.bithumb.com 최신 reference | 잘못되면 connect 실패 |
-| 심볼 코드 (`USDT_KRW`) | docs 또는 5초 probe | 잘못되면 빈 스트림 |
+| 심볼 코드 (`KRW-XRP`) | docs 또는 5초 probe | 잘못되면 빈 스트림 |
 | `orderbookdepth` 첫 메시지 깊이 (~30 levels 추정) | probe | 깊이 가정 검증 |
 | Private WS JWT payload 정확한 필드 (`access_key`, `nonce`, query_hash 필요 여부) | apidocs.bithumb.com v2.x reference | 잘못되면 auth 실패 |
 | Private WS 구독 메시지 정확한 형식 (`ticket`/`type` 배열 형식) | apidocs.bithumb.com | 잘못되면 구독 실패 |
@@ -594,9 +594,9 @@ Live WS probe against real Bithumb endpoints revealed the following (all items v
 | Public 채널 이름 | `orderbook` (not `orderbookdepth`), `trade` (not `transaction`) |
 | Private 채널 이름 | `myOrder`, `myAsset` (unchanged) |
 | 구독 메시지 형식 | 단일 JSON 배열 1회 전송 (Upbit-compatible). 채널별 별도 메시지 아님 |
-| `myOrder` codes 필터 | **필수** — `"codes": ["KRW-USDT"]` 없으면 메시지 미전달 |
+| `myOrder` codes 필터 | **필수** — `"codes": ["KRW-XRP"]` 없으면 메시지 미전달 |
 | `myAsset` codes 필터 | 불필요 (account-wide) |
-| 심볼 형식 | `KRW-USDT` (하이픈 구분, Upbit 형식). 기존 spec의 `USDT_KRW`는 v1 형식 |
+| 심볼 형식 | `KRW-XRP` (하이픈 구분, Upbit 형식). 기존 spec의 `USDT_KRW`는 v1 형식 |
 | 페이로드 구조 | Flat top-level (no `content` wrapper). `timestamp` 필드가 최상위에 ms-since-epoch int |
 | `trade` 주요 필드 | `ask_bid` (`"ASK"`/`"BID"`), `trade_price`, `trade_volume` |
 | `orderbook` 주요 필드 | `orderbook_units[].ask_price/bid_price/ask_size/bid_size` |
@@ -604,6 +604,14 @@ Live WS probe against real Bithumb endpoints revealed the following (all items v
 | `myAsset` 주요 필드 | `assets[].currency/balance/locked` (배열 구조) |
 
 **영향**: `ws_public.py`, `ws_private.py`, `convert.py`, `main.py`, 모든 fixture/테스트를 v2 스키마로 재작성 완료.
+
+### §9.2 — 시장 변경 (2026-04-28 라이브 probe 후속)
+
+원래 spec은 USDT/KRW를 가정했으나, 5분 라이브 probe 결과 사용자의 MM 봇이
+KRW-XRP에서 가장 활발(5분에 10 myOrder events)했음을 확인. KRW-USDT는 같은
+기간에 2 events로 sparse. 가설 1(Trade Velocity Filter) 검증을 위한 데이터
+밀도 측면에서 KRW-XRP로 spec 변경. 봇이 multi-market MM이므로 향후 다른
+시장(KRW-SOL 등) 캡처는 sub-project #2/#3 단계에서 별도 검토.
 
 ## 10. 성공 기준
 

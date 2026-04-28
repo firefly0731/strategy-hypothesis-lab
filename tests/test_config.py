@@ -11,7 +11,7 @@ def test_load_config_with_all_required_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OBSERVER_RUN_DIR", str(tmp_path))
     monkeypatch.setenv("OBSERVER_DURATION_SEC", "14400")
     monkeypatch.setenv("OBSERVER_MAX_RESTARTS", "10")
-    monkeypatch.setenv("OBSERVER_SYMBOL", "USDT_KRW")
+    monkeypatch.setenv("OBSERVER_SYMBOL", "KRW-XRP")
     cfg = load_config(use_dotenv=False)
     assert isinstance(cfg, Config)
     assert cfg.api_key == "key123"
@@ -19,7 +19,7 @@ def test_load_config_with_all_required_env(tmp_path: Path, monkeypatch) -> None:
     assert cfg.run_dir == tmp_path
     assert cfg.duration_sec == 14400
     assert cfg.max_restarts == 10
-    assert cfg.symbol == "USDT_KRW"
+    assert cfg.symbol == "KRW-XRP"
 
 
 def test_load_config_applies_defaults(tmp_path: Path, monkeypatch) -> None:
@@ -32,7 +32,7 @@ def test_load_config_applies_defaults(tmp_path: Path, monkeypatch) -> None:
     cfg = load_config(use_dotenv=False)
     assert cfg.duration_sec == 14400
     assert cfg.max_restarts == 10
-    assert cfg.symbol == "USDT_KRW"
+    assert cfg.symbol == "KRW-XRP"
 
 
 def test_load_config_missing_required_raises(tmp_path: Path, monkeypatch) -> None:

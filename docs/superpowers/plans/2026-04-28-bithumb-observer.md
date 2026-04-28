@@ -1,8 +1,8 @@
-# Bithumb USDT/KRW Live Capture Observer — Implementation Plan
+# Bithumb XRP/KRW Live Capture Observer — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a 4-hour Python asyncio observer that captures Bithumb USDT/KRW Public WebSocket (`orderbookdepth` + `transaction`) and Private WebSocket v2 (`myOrder` + `myAsset`) into hourly-rotated JSONL files with triple timestamps, then converts to Parquet for hypothesis 1 (Trade Velocity Filter) verification.
+**Goal:** Build a 4-hour Python asyncio observer that captures Bithumb XRP/KRW Public WebSocket (`orderbookdepth` + `transaction`) and Private WebSocket v2 (`myOrder` + `myAsset`) into hourly-rotated JSONL files with triple timestamps, then converts to Parquet for hypothesis 1 (Trade Velocity Filter) verification.
 
 **Architecture:** Single Python asyncio process holding two WebSocket connections (one public, one private with JWT auth). Each event is wrapped in a uniform envelope with `server_ts_ms` / `recv_monotonic_ns` / `recv_utc_ms` and routed to a per-channel async writer that appends JSONL with hourly file rotation. An external shell supervisor (`scripts/run.sh`) handles `caffeinate` and process restarts. Post-capture `convert.py` produces analysis-friendly Parquet files plus a quality report.
 
@@ -80,7 +80,7 @@ pythonpath = ["src"]
 
 `src/observer/__init__.py`:
 ```python
-"""Observer package — Bithumb USDT/KRW live capture pipeline."""
+"""Observer package — Bithumb XRP/KRW live capture pipeline."""
 ```
 
 `tests/__init__.py`:
@@ -100,7 +100,7 @@ BITHUMB_API_SECRET=your_v2_secret_here
 OBSERVER_RUN_DIR=./data
 OBSERVER_DURATION_SEC=14400
 OBSERVER_MAX_RESTARTS=10
-OBSERVER_SYMBOL=USDT_KRW
+OBSERVER_SYMBOL=KRW-XRP
 ```
 
 - [ ] **Step 5: Install deps and verify pytest collects**
@@ -350,7 +350,7 @@ def test_load_config_with_all_required_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OBSERVER_RUN_DIR", str(tmp_path))
     monkeypatch.setenv("OBSERVER_DURATION_SEC", "14400")
     monkeypatch.setenv("OBSERVER_MAX_RESTARTS", "10")
-    monkeypatch.setenv("OBSERVER_SYMBOL", "USDT_KRW")
+    monkeypatch.setenv("OBSERVER_SYMBOL", "KRW-XRP")
     cfg = load_config(use_dotenv=False)
     assert isinstance(cfg, Config)
     assert cfg.api_key == "key123"
@@ -358,7 +358,7 @@ def test_load_config_with_all_required_env(tmp_path: Path, monkeypatch) -> None:
     assert cfg.run_dir == tmp_path
     assert cfg.duration_sec == 14400
     assert cfg.max_restarts == 10
-    assert cfg.symbol == "USDT_KRW"
+    assert cfg.symbol == "KRW-XRP"
 
 
 def test_load_config_applies_defaults(tmp_path: Path, monkeypatch) -> None:
@@ -371,7 +371,7 @@ def test_load_config_applies_defaults(tmp_path: Path, monkeypatch) -> None:
     cfg = load_config(use_dotenv=False)
     assert cfg.duration_sec == 14400
     assert cfg.max_restarts == 10
-    assert cfg.symbol == "USDT_KRW"
+    assert cfg.symbol == "KRW-XRP"
 
 
 def test_load_config_missing_required_raises(tmp_path: Path, monkeypatch) -> None:
@@ -393,7 +393,7 @@ Run: `pytest tests/test_config.py -v` → FAIL with `ModuleNotFoundError`.
 """Runtime configuration loaded from environment.
 
 Required: BITHUMB_API_KEY, BITHUMB_API_SECRET, OBSERVER_RUN_DIR.
-Optional (with defaults): OBSERVER_DURATION_SEC=14400, OBSERVER_MAX_RESTARTS=10, OBSERVER_SYMBOL=USDT_KRW.
+Optional (with defaults): OBSERVER_DURATION_SEC=14400, OBSERVER_MAX_RESTARTS=10, OBSERVER_SYMBOL=KRW-XRP.
 """
 from __future__ import annotations
 
@@ -433,7 +433,7 @@ def load_config(*, use_dotenv: bool = True) -> Config:
         run_dir=Path(_require("OBSERVER_RUN_DIR")),
         duration_sec=int(os.environ.get("OBSERVER_DURATION_SEC", "14400")),
         max_restarts=int(os.environ.get("OBSERVER_MAX_RESTARTS", "10")),
-        symbol=os.environ.get("OBSERVER_SYMBOL", "USDT_KRW"),
+        symbol=os.environ.get("OBSERVER_SYMBOL", "KRW-XRP"),
     )
 ```
 
@@ -834,12 +834,12 @@ Implements §6.2 of the spec without reconnect logic (added in Task 10).
 
 `tests/fixtures/orderbookdepth_sample.json`:
 ```json
-{"type":"orderbookdepth","content":{"datetime":"1714287000123","symbol":"USDT_KRW","list":[{"orderType":"bid","price":"1380.5","quantity":"100","total":"3"},{"orderType":"ask","price":"1381.0","quantity":"50","total":"2"}]}}
+{"type":"orderbookdepth","content":{"datetime":"1714287000123","symbol":"KRW-XRP","list":[{"orderType":"bid","price":"1380.5","quantity":"100","total":"3"},{"orderType":"ask","price":"1381.0","quantity":"50","total":"2"}]}}
 ```
 
 `tests/fixtures/transaction_sample.json`:
 ```json
-{"type":"transaction","content":{"list":[{"symbol":"USDT_KRW","buySellGb":"2","contPrice":"1380.5","contQty":"10.5","contAmt":"14495.25","contDtm":"2026-04-28 16:00:00.123","updn":"dn"}]}}
+{"type":"transaction","content":{"list":[{"symbol":"KRW-XRP","buySellGb":"2","contPrice":"1380.5","contQty":"10.5","contAmt":"14495.25","contDtm":"2026-04-28 16:00:00.123","updn":"dn"}]}}
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -875,7 +875,7 @@ async def test_public_ws_subscribes_and_dispatches(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_public_ws(
             url=f"ws://localhost:{port}",
-            symbol="USDT_KRW",
+            symbol="KRW-XRP",
             on_event=on_event,
             stop_event=stop_event,
         )
@@ -1017,7 +1017,7 @@ async def test_public_ws_reconnects_after_disconnect(mock_ws_server) -> None:
     task = asyncio.create_task(
         run_public_ws_with_reconnect(
             url=f"ws://localhost:{port}",
-            symbol="USDT_KRW",
+            symbol="KRW-XRP",
             on_event=on_event,
             stop_event=stop_event,
             backoff_start=0.05,
@@ -1174,7 +1174,7 @@ Implements §6.3 minus reconnect (Task 13).
 
 `tests/fixtures/myorder_sample.json`:
 ```json
-{"type":"myOrder","content":{"order_id":"abc-123","order_status":"FILLED","order_side":"BID","price":"1380.0","quantity":"50","filled_quantity":"50","fee":"7.5","timestamp":"1714287030000","symbol":"USDT_KRW"}}
+{"type":"myOrder","content":{"order_id":"abc-123","order_status":"FILLED","order_side":"BID","price":"1380.0","quantity":"50","filled_quantity":"50","fee":"7.5","timestamp":"1714287030000","symbol":"KRW-XRP"}}
 ```
 
 `tests/fixtures/myasset_sample.json`:
@@ -1518,7 +1518,7 @@ async def test_run_capture_writes_each_channel(tmp_path: Path, mock_ws_server) -
         run_dir=tmp_path,
         duration_sec=1,
         max_restarts=1,
-        symbol="USDT_KRW",
+        symbol="KRW-XRP",
     )
     await run_capture(
         cfg=cfg,
@@ -1689,7 +1689,7 @@ async def test_run_capture_responds_to_external_stop(tmp_path: Path, mock_ws_ser
         run_dir=tmp_path,
         duration_sec=10,  # would be 10s if not stopped
         max_restarts=1,
-        symbol="USDT_KRW",
+        symbol="KRW-XRP",
     )
 
     from observer.main import run_capture, request_stop
@@ -1783,7 +1783,7 @@ async def test_meta_json_records_gaps_on_reconnect(tmp_path: Path, mock_ws_serve
 
     cfg = Config(
         api_key="ak", api_secret="sk", run_dir=tmp_path,
-        duration_sec=1, max_restarts=1, symbol="USDT_KRW",
+        duration_sec=1, max_restarts=1, symbol="KRW-XRP",
     )
     await run_capture(cfg=cfg, public_url=f"ws://localhost:{port}", private_url=f"ws://localhost:{port}")
     meta = json.loads((tmp_path / "meta.json").read_text())
@@ -2229,7 +2229,7 @@ def test_convert_run_writes_parquet_and_report(tmp_path: Path) -> None:
     (tmp_path / "meta.json").write_text(json.dumps({
         "started_utc_ms": 0, "ended_utc_ms": 1000, "duration_planned_sec": 1,
         "restart_count": 0, "gaps": [], "event_counts": {"transaction": 2},
-        "symbol": "USDT_KRW",
+        "symbol": "KRW-XRP",
     }))
 
     report = convert_run(tmp_path)
@@ -2717,7 +2717,7 @@ Open https://apidocs.bithumb.com and confirm or correct each:
 |---|---|---|---|
 | 1 | Public WS URL = `wss://pubwss.bithumb.com/pub/ws` | yes / no | update `src/observer/main.py::PUBLIC_URL` |
 | 2 | Private WS URL = `wss://ws-api.bithumb.com/websocket/v1/private` | yes / no | update `src/observer/main.py::PRIVATE_URL` |
-| 3 | Symbol code `USDT_KRW` | yes / no | update `.env` `OBSERVER_SYMBOL` |
+| 3 | Symbol code `KRW-XRP` | yes / no | update `.env` `OBSERVER_SYMBOL` |
 | 4 | `orderbookdepth` first message depth | record N | note in `data/<smoke-id>/notes.md` |
 | 5 | JWT payload fields needed (`access_key`, `nonce`, ?`query_hash`?) | yes / no | update `src/observer/jwt_auth.py` and corresponding tests |
 | 6 | Subscribe message format for private (`[ticket, type, type, format]`) | yes / no | update `src/observer/ws_private.py` |

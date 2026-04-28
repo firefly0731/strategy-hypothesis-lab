@@ -45,7 +45,7 @@ def test_build_dataframe_trade_extracts_side_price_qty() -> None:
             "trade",
             {
                 "type": "trade",
-                "code": "KRW-USDT",
+                "code": "KRW-XRP",
                 "trade_price": 1380.5,
                 "trade_volume": 10,
                 "ask_bid": "BID",
@@ -57,7 +57,7 @@ def test_build_dataframe_trade_extracts_side_price_qty() -> None:
             "trade",
             {
                 "type": "trade",
-                "code": "KRW-USDT",
+                "code": "KRW-XRP",
                 "trade_price": 1380.0,
                 "trade_volume": 5.5,
                 "ask_bid": "ASK",
@@ -79,7 +79,7 @@ def test_build_dataframe_myorder_extracts_status_fields() -> None:
             "myOrder",
             {
                 "type": "myOrder",
-                "code": "KRW-USDT",
+                "code": "KRW-XRP",
                 "uuid": "abc-123",
                 "ask_bid": "ASK",
                 "order_type": "limit",
@@ -115,12 +115,12 @@ def test_convert_run_writes_parquet_and_report(tmp_path: Path) -> None:
     jsonl = tmp_path / "trade_2026-04-28T07.jsonl"
     jsonl.write_text(
         json.dumps(_envelope("trade", {
-            "type": "trade", "code": "KRW-USDT",
+            "type": "trade", "code": "KRW-XRP",
             "trade_price": 1380.5, "trade_volume": 10, "ask_bid": "BID",
             "timestamp": 1777351327800,
         }, recv_monotonic_ns=1)) + "\n"
         + json.dumps(_envelope("trade", {
-            "type": "trade", "code": "KRW-USDT",
+            "type": "trade", "code": "KRW-XRP",
             "trade_price": 1380.0, "trade_volume": 5, "ask_bid": "ASK",
             "timestamp": 1777351327900,
         }, recv_monotonic_ns=2)) + "\n"
@@ -129,7 +129,7 @@ def test_convert_run_writes_parquet_and_report(tmp_path: Path) -> None:
     (tmp_path / "meta.json").write_text(json.dumps({
         "started_utc_ms": 0, "ended_utc_ms": 1000, "duration_planned_sec": 1,
         "restart_count": 0, "gaps": [], "event_counts": {"trade": 2},
-        "symbol": "KRW-USDT",
+        "symbol": "KRW-XRP",
     }))
 
     report = convert_run(tmp_path)
