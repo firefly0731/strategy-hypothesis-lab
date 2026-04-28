@@ -13,7 +13,7 @@ from observer.writer import Writer
 from observer.ws_private import run_private_ws_with_reconnect
 from observer.ws_public import run_public_ws_with_reconnect
 
-PUBLIC_URL = "wss://pubwss.bithumb.com/pub/ws"
+PUBLIC_URL = "wss://ws-api.bithumb.com/websocket/v1"
 PRIVATE_URL = "wss://ws-api.bithumb.com/websocket/v1/private"
 CHANNELS = ("orderbookdepth", "transaction", "myOrder", "myAsset")
 

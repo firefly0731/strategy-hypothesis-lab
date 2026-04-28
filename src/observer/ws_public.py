@@ -43,8 +43,8 @@ async def run_public_ws(
 ) -> None:
     """Single-attempt WS run. Returns when stop_event is set or connection closes."""
     async with websockets.connect(url, ping_interval=30) as ws:
-        await ws.send(orjson.dumps({"type": "orderbookdepth", "symbols": [symbol]}).decode())
-        await ws.send(orjson.dumps({"type": "transaction", "symbols": [symbol]}).decode())
+        await ws.send(orjson.dumps({"type": "orderbookdepth", "codes": [symbol]}).decode())
+        await ws.send(orjson.dumps({"type": "transaction", "codes": [symbol]}).decode())
         async for raw_msg in ws:
             if stop_event.is_set():
                 return
