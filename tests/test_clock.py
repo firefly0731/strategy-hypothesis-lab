@@ -2,7 +2,7 @@ import time
 from observer.clock import stamp
 
 
-def test_stamp_returns_envelope_with_four_keys() -> None:
+def test_stamp_envelope_shape() -> None:
     raw = {"hello": "world"}
     env = stamp(channel="transaction", server_ts_ms=1714287000123, raw=raw)
     assert set(env.keys()) == {"channel", "server_ts_ms", "recv_monotonic_ns", "recv_utc_ms", "raw"}
