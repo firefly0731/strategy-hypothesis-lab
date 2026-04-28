@@ -34,4 +34,3 @@ class ExponentialBackoff:
     def mark_connected(self, now: float | None = None) -> None:
         now = now if now is not None else time.monotonic()
         self._last_connected_at = now
-        self._attempt += 1

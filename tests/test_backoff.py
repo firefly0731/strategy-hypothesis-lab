@@ -21,7 +21,7 @@ def test_mark_connected_does_not_reset_immediately() -> None:
     b.next_delay()  # bump attempt to 2
     b.mark_connected(now=100.0)
     # Connection just opened — disconnect happens after 30 sec → still no reset
-    assert b.next_delay(now=130.0) == 4.0  # would be 4th attempt = 4.0
+    assert b.next_delay(now=130.0) == 2.0  # _attempt stays at 2; delay = 0.5 * 2^2
 
 
 def test_sustained_connection_resets_attempts() -> None:
