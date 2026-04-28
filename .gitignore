@@ -23,3 +23,6 @@ __pycache__/
 
 # Captured run data (smoke tests, live runs)
 data/
+
+# Claude Code local settings
+.claude/
