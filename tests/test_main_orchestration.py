@@ -45,3 +45,30 @@ async def test_run_capture_writes_each_channel(tmp_path: Path, mock_ws_server) -
     assert "started_utc_ms" in meta
     assert "ended_utc_ms" in meta
     assert "event_counts" in meta
+
+
+@pytest.mark.asyncio
+async def test_run_capture_responds_to_external_stop(tmp_path: Path, mock_ws_server) -> None:
+    """If the caller sets stop_event before duration elapses, run exits early."""
+    server, port = mock_ws_server
+    server.controller.pushes = []  # no events; we just want a fast graceful exit
+
+    cfg = Config(
+        api_key="ak",
+        api_secret="sk",
+        run_dir=tmp_path,
+        duration_sec=10,  # would be 10s if not stopped
+        max_restarts=1,
+        symbol="USDT_KRW",
+    )
+
+    from observer.main import run_capture, request_stop
+    task = asyncio.create_task(
+        run_capture(cfg=cfg, public_url=f"ws://localhost:{port}", private_url=f"ws://localhost:{port}")
+    )
+    await asyncio.sleep(0.3)
+    request_stop()
+    await asyncio.wait_for(task, timeout=2.0)
+
+    # Should still have written meta.json
+    assert (tmp_path / "meta.json").exists()

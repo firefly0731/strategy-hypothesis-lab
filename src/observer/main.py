@@ -17,6 +17,14 @@ PUBLIC_URL = "wss://pubwss.bithumb.com/pub/ws"
 PRIVATE_URL = "wss://ws-api.bithumb.com/websocket/v1/private"
 CHANNELS = ("orderbookdepth", "transaction", "myOrder", "myAsset")
 
+_GLOBAL_STOP: asyncio.Event | None = None
+
+
+def request_stop() -> None:
+    """Trigger shutdown of the active run_capture (if any)."""
+    if _GLOBAL_STOP is not None:
+        _GLOBAL_STOP.set()
+
 
 async def run_capture(
     *,
@@ -40,6 +48,8 @@ async def run_capture(
         await writers[channel].enqueue(env)
 
     stop_event = asyncio.Event()
+    global _GLOBAL_STOP
+    _GLOBAL_STOP = stop_event
 
     async def duration_timer() -> None:
         try:
@@ -75,6 +85,7 @@ async def run_capture(
         await asyncio.gather(public_task, private_task, return_exceptions=True)
         for w in writers.values():
             await w.close()
+        _GLOBAL_STOP = None
 
     ended_utc_ms = int(time.time() * 1000)
     (cfg.run_dir / "meta.json").write_text(
@@ -94,8 +105,17 @@ async def run_capture(
 
 
 def main() -> None:
+    import signal
+
     cfg = load_config()
-    asyncio.run(run_capture(cfg=cfg))
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, request_stop)
+    try:
+        loop.run_until_complete(run_capture(cfg=cfg))
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
