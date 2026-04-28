@@ -20,3 +20,6 @@ __pycache__/
 
 # Logs
 *.log
+
+# Captured run data (smoke tests, live runs)
+data/
