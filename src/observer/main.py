@@ -40,6 +40,7 @@ async def run_capture(
         await w.start()
 
     counts: dict[str, int] = {ch: 0 for ch in CHANNELS}
+    gaps: list[dict[str, Any]] = []
 
     async def on_event(channel: str, env: Envelope) -> None:
         if channel not in writers:
@@ -51,6 +52,34 @@ async def run_capture(
     global _GLOBAL_STOP
     _GLOBAL_STOP = stop_event
 
+    last_disconnect: dict[str, int] = {}
+
+    def make_disconnect_cb(group: str):
+        def cb() -> None:
+            last_disconnect[group] = time.monotonic_ns()
+        return cb
+
+    def record_gap_if_pending(group: str) -> None:
+        start = last_disconnect.pop(group, None)
+        if start is None:
+            return
+        end = time.monotonic_ns()
+        gaps.append(
+            {
+                "channel": group,
+                "start_monotonic_ns": start,
+                "end_monotonic_ns": end,
+                "duration_ms": (end - start) // 1_000_000,
+                "reason": "ws_disconnect",
+            }
+        )
+
+    async def on_event_with_gap_close(channel: str, env: Envelope) -> None:
+        # First event after a disconnect closes the gap for that group
+        group = "private" if channel in ("myOrder", "myAsset") else "public"
+        record_gap_if_pending(group)
+        await on_event(channel, env)
+
     async def duration_timer() -> None:
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=cfg.duration_sec)
@@ -59,19 +88,16 @@ async def run_capture(
 
     public_task = asyncio.create_task(
         run_public_ws_with_reconnect(
-            url=public_url,
-            symbol=cfg.symbol,
-            on_event=on_event,
-            stop_event=stop_event,
+            url=public_url, symbol=cfg.symbol,
+            on_event=on_event_with_gap_close, stop_event=stop_event,
+            on_disconnect=make_disconnect_cb("public"),
         )
     )
     private_task = asyncio.create_task(
         run_private_ws_with_reconnect(
-            url=private_url,
-            api_key=cfg.api_key,
-            api_secret=cfg.api_secret,
-            on_event=on_event,
-            stop_event=stop_event,
+            url=private_url, api_key=cfg.api_key, api_secret=cfg.api_secret,
+            on_event=on_event_with_gap_close, stop_event=stop_event,
+            on_disconnect=make_disconnect_cb("private"),
         )
     )
     timer_task = asyncio.create_task(duration_timer())
@@ -95,7 +121,7 @@ async def run_capture(
                 "ended_utc_ms": ended_utc_ms,
                 "duration_planned_sec": cfg.duration_sec,
                 "restart_count": 0,
-                "gaps": [],
+                "gaps": gaps,
                 "event_counts": counts,
                 "symbol": cfg.symbol,
             },
