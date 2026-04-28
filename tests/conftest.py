@@ -41,7 +41,7 @@ async def mock_ws_server():
                 received_count += 1
                 if any(s.get("echo") for s in controller.script):
                     await ws.send(raw)
-                if controller.drop_after is not None and received_count >= controller.drop_after + 2:
+                if controller.drop_after is not None and received_count >= controller.drop_after:
                     await ws.close()
                     return
         except websockets.ConnectionClosed:

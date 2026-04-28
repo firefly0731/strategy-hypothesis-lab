@@ -58,7 +58,7 @@ async def test_public_ws_reconnects_after_disconnect(mock_ws_server) -> None:
 
     # First connection: send 1 frame then drop.
     server.controller.pushes = [sample]
-    server.controller.drop_after = 0  # close immediately after pushes
+    server.controller.drop_after = 2  # close after both subscribes (orderbookdepth + transaction) received
 
     received: list[tuple[str, dict]] = []
     stop_event = asyncio.Event()
