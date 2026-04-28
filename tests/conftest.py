@@ -32,7 +32,7 @@ async def mock_ws_server():
         # Push pre-scripted frames
         for frame in controller.pushes:
             await ws.send(json.dumps(frame) if not isinstance(frame, (str, bytes)) else frame)
-        # Read incoming
+        # Read incoming; drop_after=0 means close after draining initial subscribe messages
         try:
             received_count = 0
             async for raw in ws:
@@ -41,7 +41,7 @@ async def mock_ws_server():
                 received_count += 1
                 if any(s.get("echo") for s in controller.script):
                     await ws.send(raw)
-                if controller.drop_after is not None and received_count >= controller.drop_after:
+                if controller.drop_after is not None and received_count >= controller.drop_after + 2:
                     await ws.close()
                     return
         except websockets.ConnectionClosed:

@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 import orjson
 import websockets
 
+from observer.backoff import ExponentialBackoff
 from observer.clock import stamp
 
 OnEvent = Callable[[str, dict[str, Any]], Awaitable[None]]
@@ -55,3 +56,31 @@ async def run_public_ws(
                 raw=payload,
             )
             await on_event(channel, env)
+
+
+async def run_public_ws_with_reconnect(
+    *,
+    url: str,
+    symbol: str,
+    on_event: OnEvent,
+    stop_event: asyncio.Event,
+    backoff_start: float = 0.5,
+    backoff_cap: float = 30.0,
+    sustain_reset_sec: float = 60.0,
+    on_disconnect: Callable[[], None] | None = None,
+) -> None:
+    """Outer loop: connect → run → on disconnect, backoff and reconnect."""
+    backoff = ExponentialBackoff(
+        start=backoff_start, cap=backoff_cap, sustain_reset_sec=sustain_reset_sec
+    )
+    while not stop_event.is_set():
+        try:
+            backoff.mark_connected()
+            await run_public_ws(url=url, symbol=symbol, on_event=on_event, stop_event=stop_event)
+        except (websockets.ConnectionClosed, OSError):
+            pass
+        if stop_event.is_set():
+            return
+        if on_disconnect is not None:
+            on_disconnect()
+        await asyncio.sleep(backoff.next_delay())
