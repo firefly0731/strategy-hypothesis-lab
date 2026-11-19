@@ -69,7 +69,9 @@ def session_dates(spec: SessionSpec, start: str, end: str) -> pd.DatetimeIndex:
 
 
 def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float = 0.02,
-                   n_pre: int = 60) -> SessionMatrix:
+                   n_pre: int = 60, quality_lookback: int = 1) -> SessionMatrix:
+    """quality_lookback: a session is tradable only if each of the previous
+    `quality_lookback` sessions had <= max_filled_frac synthetic (outage) bars."""
     """df: output of data.load_klines (regular 1-minute UTC grid)."""
     idx = df.index
     t0 = idx[0]
@@ -96,7 +98,7 @@ def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float =
         filled=filled,
         # causal: decided from the *previous* session's data quality only.
         # (Using this session's own outage share would peek at future bars.)
-        tradable=np.concatenate([[True], filled[:-1].mean(axis=1) <= max_filled_frac]),
+        tradable=_causal_quality(filled.mean(axis=1) <= max_filled_frac, quality_lookback),
         # pre-open bars [start - n_pre, start): all closed by the session open
         TBV=take("taker_buy_volume") if "taker_buy_volume" in df else None,
         pre_C=df["close"].to_numpy()[pos[:, :1] - n_pre + np.arange(n_pre)[None, :]] if n_pre else None,
@@ -104,3 +106,12 @@ def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float =
     # sanity: bar k of session i really is the kline opening at start + k
     assert (df.index[pos[:, 0]] == m.start_utc).all()
     return m
+
+
+def _causal_quality(ok: np.ndarray, lookback: int) -> np.ndarray:
+    """tradable[i] = all(ok[i-lookback : i]); True where history is shorter."""
+    bad = (~ok).astype(int)
+    cs = np.concatenate([[0], np.cumsum(bad)])
+    i = np.arange(len(ok))
+    lo = np.maximum(i - lookback, 0)
+    return (cs[i] - cs[lo]) == 0

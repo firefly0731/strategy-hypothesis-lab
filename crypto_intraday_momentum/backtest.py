@@ -32,6 +32,7 @@ class Config:
     exit_mode: str = "taker"           # taker | maker (unfilled -> taker at timeout)
     maker_timeout: int = 5             # minutes a maker order rests
     maker_offset_ticks: float = 1.0    # buy at last - k*tick, sell at last + k*tick
+    maker_offset_bps: float | None = None  # if set, overrides ticks: last * (1 -/+ bps)
     eod_maker_window: int = 10         # maker EOD exit starts this many minutes before end
     tick: float = 0.1
     maker_fee: float = 0.0002
@@ -94,7 +95,10 @@ def _order(m: SessionMatrix, i: int, t: int, side: int, mode: str, deadline: int
     if mode == "taker":
         return _Fill(t, _taker_price(m, i, t, side, slip), False)
     last = m.C[i, t - 1]                               # last trade known at send time
-    limit = last - side * cfg.maker_offset_ticks * cfg.tick
+    if cfg.maker_offset_bps is not None:
+        limit = last * (1.0 - side * cfg.maker_offset_bps * 1e-4)
+    else:
+        limit = last - side * cfg.maker_offset_ticks * cfg.tick
     end = min(t + (cfg.maker_timeout if timeout is None else timeout), deadline)
     if end > t:
         if side > 0:
