@@ -108,6 +108,10 @@ def selection_masks(panel, min_hist=250, min_qv=100e6, k_list=(3, 5, 8)) -> dict
     for k in k_list:
         rank = sr.where(elig).rank(axis=1, ascending=False)
         masks[f"top{k}_by_trailing_sr"] = hold((rank <= k).astype(float))
+    # liquidity only: the k most traded coins in the previous 30 sessions (needs >= 60 sessions)
+    qv_rank = qv.where(hist >= 60).rank(axis=1, ascending=False)
+    for k in (2, 3, 5):
+        masks[f"top{k}_by_liquidity"] = hold((qv_rank <= k).astype(float))
     return masks
 
 

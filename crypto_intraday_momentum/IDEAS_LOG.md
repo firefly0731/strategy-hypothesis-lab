@@ -18,4 +18,10 @@ NY, `maker_chase` execution, BTC+ETH+SOL equal weight. The hold-out set is BNB+X
 | 8 | Hold past 16:00 (6 horizons × 3 post-close rules) | 16 | Discovery Sharpe 1.22 → 1.02–1.11. Post-close P&L ≈ 0 bp on BTC/ETH/SOL. CPCV picks 16:00 40/45 | rejected |
 | 9 | Order-flow confirmation (taker-buy imbalance: since open / last 30 min / z-score) | 6 (attribution only) | No monotonic relation in either set. 80–95% of breakouts already go with the flow, so the feature is redundant with price. Weak post-hoc hint that the *least* aligned quintile is best (exhaustion?), not pursued because of snooping | rejected |
 
-Total variants tried so far: 206.
+| 10 | Universe expansion: 27 candidates incl. dead coins (LUNA, FTT, MATIC), monthly point-in-time selection (all liquid / trailing SR / VR / top-k by liquidity) | 10 | Fixed BTC+ETH+SOL is best (SR 1.33). The 20 coins never used before have median SR 0.06 (11/20 > 0). Edge is concentrated in the most liquid coins. The ex-ante rule "top-2 by liquidity" (BTC+ETH) gives SR 1.29 | keep BTC+ETH+SOL; justify ex-ante as "most liquid" |
+| 11 | Range / mean-reversion strategies (separate package `crypto_range/`, see its IDEAS_LOG) | 92 + 18-cell scan | Pre-registered A–E all lose after costs. Post-hoc F (fade the 08:30→09:29 move at 09:30, exit 10:00) is +13.8 bp/trade maker, but its edge decayed after 2023 and it is weak in the same years as momentum | rejected (F: forward-test only) |
+
+Correction: an earlier claim that 30-min returns had lag-1 autocorrelation ≈ −0.09 every year was a
+small-sample bias (mean of per-session correlations over 12 pairs). The pooled estimate is −0.04…+0.06.
+
+Total variants tried so far: ~326 (incl. the range research).
