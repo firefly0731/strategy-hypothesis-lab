@@ -30,6 +30,7 @@ def summarize(res: Result, periods_per_year: float) -> dict:
         out.update(
             win_rate=float((t["pnl"] > 0).mean()),
             avg_bps_per_trade=rn.mean() * 1e4,
+            avg_gross_bps=float((t["gross"] / t["notional"]).mean() * 1e4),
             t_stat=rn.mean() / rn.std(ddof=1) * np.sqrt(len(rn)) if len(rn) > 1 else np.nan,
             avg_hold_min=float(t["hold_min"].mean()),
             maker_entry_share=float(t["entry_maker"].mean()),

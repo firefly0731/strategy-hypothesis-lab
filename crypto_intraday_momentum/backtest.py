@@ -116,7 +116,7 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
     eod_start = n_min - cfg.eod_maker_window if cfg.exit_mode == "maker" else n_min
     f_times = f_rates = None
     if cfg.include_funding and funding is not None and len(funding):
-        f_times = funding["time"].to_numpy().astype("datetime64[ns]").astype(np.int64)
+        f_times = pd.DatetimeIndex(funding["time"]).as_unit("ns").asi8
         f_rates = funding["rate"].to_numpy()
 
     equity = cfg.initial_equity
