@@ -98,3 +98,20 @@ These filters come from the trade attribution in `analyze_trades.py`.
 `run_improve.py` validates them on the discovery set (BTC/ETH/SOL) and on a hold-out set
 (BNB/XRP/DOGE, not used to find the rules). It reports a 5×4 threshold sensitivity grid,
 CPCV over the grid, and yearly returns.
+
+## Position sizing (`sizing.py`, `run_sizing.py`)
+P&L is linear in size, so the strategy is run once at 1x notional. Each trade then gets a
+leverage computed only from information available before its decision time.
+- Schemes:
+  - `paper`: 2% / 14-session close-to-close vol.
+  - `rv24`: 2% / realised vol from 5-minute returns over the 24h before the open.
+  - `ewma_rv24`: a smoothed version of `rv24`.
+  - `strategy_vol`: targets the strategy's own trailing vol.
+  - `risk_per_trade`: R / distance to the trailing stop, with a 0.5σ floor.
+- Portfolio: equal or inverse-vol weights. A portfolio vol target uses the realised vol of
+  the previous 60 sessions. Per-trade effective leverage on total equity is capped at 3x.
+- Drawdown throttle: exposure × clip(1 − DD/dd_max, 0.25, 1), using the drawdown at the
+  previous session's close.
+- `run_sizing.py` also reports the adverse excursion per trade, a leverage ladder, and a
+  block-bootstrap MDD distribution (20-session blocks). The throttle is re-applied on each
+  resampled path.
