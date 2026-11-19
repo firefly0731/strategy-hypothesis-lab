@@ -66,3 +66,17 @@ Data is downloaded from `data.binance.vision` (1m klines + funding) and cached i
 - Stops are checked only at the 30-minute decision times, as in the paper. There is no intrabar stop.
 - The random-direction test reuses the actual fill prices, so it is approximate. Use it on the `taker` variant.
 - Tick sizes are hard-coded in `run.py`.
+
+## CPCV & regime decomposition (`cpcv.py`, `run_cpcv.py`)
+- **Unit = one session.** Every trade opens and closes inside one session, so splits never cut a trade.
+- **Splits**: 10 contiguous groups, 2 test groups per split → 45 splits and 9 full OOS paths.
+  Purge = 0 because labels end at the session close. Embargo = 30 sessions after each test
+  group, because σ and the daily vol look back up to 30 sessions.
+- **Selection**: in each split, the combo with the best train Sharpe among 120 combos
+  (lookback {7,10,14,21,30} × interval {15,30,60} × exec {taker, maker_chase} × cost filter
+  {0,2,4,8}) is applied to the test groups. PBO is computed from the OOS rank of the IS winner.
+- **Cost filter** (`Config.cost_filter_mult`): open a new position only if σ at that decision
+  time is ≥ mult × the expected round-trip cost.
+- **Regime decomposition** of the OOS returns (Newey-West t, demeaned regressors):
+  market direction β, ex-ante regimes (60-session trend, 20-session vol), a regime-balanced
+  mean (2×2 ex-ante cells weighted equally), and same-session |move| terciles.

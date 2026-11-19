@@ -38,12 +38,22 @@ class Config:
     taker_fee: float = 0.0005
     taker_slippage_bps: float = 1.0
     include_funding: bool = True
+    # cost filter: open a new position only if the noise sigma at that decision
+    # time is >= cost_filter_mult x estimated round-trip cost (0 disables)
+    cost_filter_mult: float = 0.0
     # sizing
     sizing: str = "vol"                # vol | fixed
     target_vol: float = 0.02           # daily vol target (paper: 2%)
     max_leverage: float = 4.0
     fixed_leverage: float = 1.0
     initial_equity: float = 100_000.0
+
+    def round_trip_cost(self) -> float:
+        """Expected round-trip cost as a fraction of notional (ex-ante)."""
+        slip = self.taker_slippage_bps * 1e-4
+        leg_in = self.maker_fee if self.entry_mode == "maker" else self.taker_fee + slip
+        leg_out = self.maker_fee if self.exit_mode == "maker" else self.taker_fee + slip
+        return leg_in + leg_out
 
     def to_dict(self):
         return asdict(self)
@@ -121,6 +131,7 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
 
     equity = cfg.initial_equity
     trades, sess_rows, missed = [], [], []
+    min_sigma = cfg.cost_filter_mult * cfg.round_trip_cost()
 
     for i in range(m.n):
         eq0 = equity
@@ -170,6 +181,8 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
                 want = 1 if p >= max(ub, vw) else (-1 if p < lb else 0)
             else:
                 want = -1 if p <= min(lb, vw) else (1 if p > ub else 0)
+            if want != 0 and want != pos and s.sigma[i, j] < min_sigma:
+                want = 0                      # cost filter blocks the new leg only
             if want == pos:
                 continue
 
