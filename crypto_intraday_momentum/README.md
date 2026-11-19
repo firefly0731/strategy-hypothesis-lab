@@ -80,3 +80,12 @@ Data is downloaded from `data.binance.vision` (1m klines + funding) and cached i
 - **Regime decomposition** of the OOS returns (Newey-West t, demeaned regressors):
   market direction β, ex-ante regimes (60-session trend, 20-session vol), a regime-balanced
   mean (2×2 ex-ante cells weighted equally), and same-session |move| terciles.
+
+## Markov-chain Monte-Carlo bands (`mc_bands.py`, `run_mc.py`)
+The band is the q / (1−q) quantile of the simulated open→m cumulative return. The simulation
+uses 5-minute returns standardised by a time-of-day scale, and a 3-state volatility Markov
+chain estimated over the previous 20 sessions (transitions within sessions only). The
+starting state comes from the realised vol of the 60 minutes before the open. Each step
+bootstraps from the empirical pool of its state. With `n_states=1` the Markov structure is
+switched off (control). q = 0.79 matches the paper's σ width for Gaussian noise. RNG is
+seeded per session; the look-ahead perturbation test covers both variants.

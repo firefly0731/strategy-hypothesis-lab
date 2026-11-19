@@ -119,7 +119,7 @@ def _one_session(lows, highs, last=100.0):
     idx = pd.date_range("2024-03-11 13:30", periods=390, freq="1min", tz="UTC")
     df = pd.DataFrame(dict(open=last, high=last + 1, low=last - 1, close=last, volume=1.0,
                            quote_volume=last, filled=False), index=idx)
-    m = build_sessions(df, US)
+    m = build_sessions(df, US, n_pre=0)
     for k, (lo, hi) in enumerate(zip(lows, highs)):
         m.L[0, 31 + k], m.H[0, 31 + k] = lo, hi
     m.L[0, 30], m.H[0, 30] = last, last
@@ -138,3 +138,23 @@ def test_maker_needs_trade_through():
     m = _one_session([99.5, 99.5, 99.5], [100, 100, 100])
     f = _order(m, 0, 30, +1, "maker", 390, cfg, fallback_taker=True)
     assert not f.maker and f.bar == 33
+
+
+@pytest.mark.parametrize("n_states", [1, 3])
+def test_mc_bands_ignore_future_bars(df, n_states):
+    from crypto_intraday_momentum.mc_bands import compute_mc_signals
+    m0 = build_sessions(df, US)
+    i = m0.n - 15
+    T = m0.start_utc[i] + pd.Timedelta(minutes=90)
+    kw = dict(lookback=20, n_states=n_states, n_paths=300)
+    s0 = compute_mc_signals(m0, **kw)
+    s1 = compute_mc_signals(build_sessions(perturb_from(df, T), US), **kw)
+    st = m0.start_utc.tz_convert(None).to_numpy().astype("datetime64[m]")
+    known = (st[:, None] + s0.dec_min.astype("timedelta64[m]")[None, :]) <= np.datetime64(T.tz_convert(None), "m")
+    # bands of session i are fixed at its open -> whole rows up to and incl. session i
+    for name in ("ub", "lb", "sigma"):
+        a, b = getattr(s0, name)[: i + 1], getattr(s1, name)[: i + 1]
+        assert np.array_equal(a, b, equal_nan=True), name
+    assert np.array_equal(s0.px[known], s1.px[known])
+    assert np.isfinite(s0.ub[25:]).all()
+    assert not np.allclose(s0.ub[i + 1:], s1.ub[i + 1:])   # later sessions do see the change

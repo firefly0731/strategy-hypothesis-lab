@@ -43,6 +43,7 @@ class SessionMatrix:
     QV: np.ndarray               # quote volume (for exact VWAP)
     filled: np.ndarray           # bool, synthetic bars from outages
     tradable: np.ndarray         # (n_sessions,) False if the previous session had many outage bars
+    pre_C: np.ndarray | None = None  # (n_sessions, n_pre) closes of the bars just BEFORE the open
 
     @property
     def n(self) -> int:
@@ -66,7 +67,8 @@ def session_dates(spec: SessionSpec, start: str, end: str) -> pd.DatetimeIndex:
     return pd.DatetimeIndex(days).tz_localize(None)
 
 
-def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float = 0.02) -> SessionMatrix:
+def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float = 0.02,
+                   n_pre: int = 60) -> SessionMatrix:
     """df: output of data.load_klines (regular 1-minute UTC grid)."""
     idx = df.index
     t0 = idx[0]
@@ -76,7 +78,7 @@ def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float =
     start_utc = local.tz_localize(spec.tz, nonexistent="raise", ambiguous="raise").tz_convert("UTC")
 
     pos0 = ((start_utc - t0) // pd.Timedelta(minutes=1)).to_numpy().astype(np.int64)
-    ok = (pos0 >= 0) & (pos0 + spec.n_minutes <= len(idx))
+    ok = (pos0 - n_pre >= 0) & (pos0 + spec.n_minutes <= len(idx))
     pos = pos0[ok][:, None] + np.arange(spec.n_minutes)[None, :]
 
     def take(col):
@@ -94,6 +96,8 @@ def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float =
         # causal: decided from the *previous* session's data quality only.
         # (Using this session's own outage share would peek at future bars.)
         tradable=np.concatenate([[True], filled[:-1].mean(axis=1) <= max_filled_frac]),
+        # pre-open bars [start - n_pre, start): all closed by the session open
+        pre_C=df["close"].to_numpy()[pos[:, :1] - n_pre + np.arange(n_pre)[None, :]] if n_pre else None,
     )
     # sanity: bar k of session i really is the kline opening at start + k
     assert (df.index[pos[:, 0]] == m.start_utc).all()
