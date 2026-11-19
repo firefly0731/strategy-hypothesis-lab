@@ -4,3 +4,5 @@ __pycache__/
 crypto_intraday_momentum/results/
 crypto_range/results/
 crypto_xsec/results/
+crypto_vrp/data_cache/
+crypto_vrp/results/
