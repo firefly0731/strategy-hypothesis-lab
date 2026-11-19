@@ -115,3 +115,11 @@ leverage computed only from information available before its decision time.
 - `run_sizing.py` also reports the adverse excursion per trade, a leverage ladder, and a
   block-bootstrap MDD distribution (20-session blocks). The throttle is re-applied on each
   resampled path.
+
+## Walk-forward (`walkforward.py`)
+This is an anchored walk-forward of the whole design process. At the start of each period,
+the entry rules × sizing scheme (best train Sharpe) and the throttle level (best train
+Calmar) are chosen from data before the period only, then applied to the period. The
+results are joined into one out-of-sample curve for 2022-01 to 2026-11. 2026-11 comes from
+the daily archives and was never used in any design step. Its funding is unavailable and
+set to 0.

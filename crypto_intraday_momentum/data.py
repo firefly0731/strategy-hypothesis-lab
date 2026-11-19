@@ -18,6 +18,7 @@ import pandas as pd
 import requests
 
 BASE = "https://data.binance.vision/data/futures/um/monthly"
+DAILY = "https://data.binance.vision/data/futures/um/daily"
 DEFAULT_CACHE = Path(__file__).resolve().parent / "data_cache"
 
 KLINE_COLS = [
@@ -54,15 +55,39 @@ def _fetch_zip_csv(url: str) -> pd.DataFrame | None:
     return pd.read_csv(io.BytesIO(raw), header=0 if has_header else None)
 
 
+def _day_klines(symbol: str, day: str, cache: Path) -> pd.DataFrame | None:
+    """Daily archive, used for the current month before its monthly file exists."""
+    path = cache / "klines_daily" / symbol / f"{symbol}-1m-{day}.parquet"
+    if path.exists():
+        return pd.read_parquet(path)
+    df = _fetch_zip_csv(f"{DAILY}/klines/{symbol}/1m/{symbol}-1m-{day}.zip")
+    if df is None:
+        return None
+    out = _clean_klines(df)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_parquet(path, index=False)
+    return out
+
+
 def _month_klines(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
     path = cache / "klines" / symbol / f"{symbol}-1m-{month}.parquet"
     if path.exists():
         return pd.read_parquet(path)
     df = _fetch_zip_csv(f"{BASE}/klines/{symbol}/1m/{symbol}-1m-{month}.zip")
     if df is None:
-        return None
+        days = pd.date_range(month + "-01", periods=pd.Period(month).days_in_month, freq="D")
+        parts = [_day_klines(symbol, d.strftime("%Y-%m-%d"), cache) for d in days]
+        parts = [x for x in parts if x is not None and len(x)]
+        return pd.concat(parts, ignore_index=True) if parts else None
+    out = _clean_klines(df)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_parquet(path, index=False)
+    return out
+
+
+def _clean_klines(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = KLINE_COLS[: df.shape[1]]
-    out = pd.DataFrame({
+    return pd.DataFrame({
         "open_time": _to_utc(df["open_time"]),
         "open": df["open"].astype(float),
         "high": df["high"].astype(float),
@@ -71,9 +96,6 @@ def _month_klines(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
         "volume": df["volume"].astype(float),
         "quote_volume": df["quote_volume"].astype(float),
     })
-    path.parent.mkdir(parents=True, exist_ok=True)
-    out.to_parquet(path, index=False)
-    return out
 
 
 def _month_funding(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
