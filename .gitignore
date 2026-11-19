@@ -8,3 +8,5 @@ crypto_vrp/data_cache/
 crypto_vrp/results/
 crypto_grid/results/
 research/mm/sources/
+crypto_mm/data_cache/
+crypto_mm/results/
