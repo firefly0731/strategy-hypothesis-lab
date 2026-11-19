@@ -1,0 +1,4 @@
+websockets>=12
+hftbacktest>=2.4
+numpy
+pytest

@@ -1,0 +1,21 @@
+# Binance USD-M futures public market-data collector configuration.
+out_dir = "./md_raw"
+ws_url = "wss://fstream.binance.com/stream"
+rest_url = "https://fapi.binance.com"
+snapshot_limit = 1000
+snapshot_every_s = 3600
+reconnect_every_s = 82800      # 23h; Binance closes connections after 24h
+
+# Maker venue: USDC perps with full diff depth.
+# Fair value: USDT perps with trades + best bid/ask only (saves disk). Add "depth@0ms" if needed.
+[symbols]
+BTCUSDC  = ["depth@0ms", "trade", "bookTicker"]
+ETHUSDC  = ["depth@0ms", "trade", "bookTicker"]
+SOLUSDC  = ["depth@0ms", "trade", "bookTicker"]
+XRPUSDC  = ["depth@0ms", "trade", "bookTicker"]
+DOGEUSDC = ["depth@0ms", "trade", "bookTicker"]
+BTCUSDT  = ["trade", "bookTicker"]
+ETHUSDT  = ["trade", "bookTicker"]
+SOLUSDT  = ["trade", "bookTicker"]
+XRPUSDT  = ["trade", "bookTicker"]
+DOGEUSDT = ["trade", "bookTicker"]
