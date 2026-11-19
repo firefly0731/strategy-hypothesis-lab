@@ -16,5 +16,6 @@ NY, `maker_chase` execution, BTC+ETH+SOL equal weight. The hold-out set is BNB+X
 | 6 | Earlier session anchor (06:00–09:00 NY) | 10 | Worse the earlier it starts. Pre-open entries are −17…−27 bp | rejected |
 | 7 | Sizing schemes × weights × drawdown throttle | 20 | rv24 ≈ risk-per-trade > paper (t ≤ 0.5). The throttle cuts bootstrap tail MDD −23% → −16% | **adopted** (rv24, equal, dd 15%) |
 | 8 | Hold past 16:00 (6 horizons × 3 post-close rules) | 16 | Discovery Sharpe 1.22 → 1.02–1.11. Post-close P&L ≈ 0 bp on BTC/ETH/SOL. CPCV picks 16:00 40/45 | rejected |
+| 9 | Order-flow confirmation (taker-buy imbalance: since open / last 30 min / z-score) | 6 (attribution only) | No monotonic relation in either set. 80–95% of breakouts already go with the flow, so the feature is redundant with price. Weak post-hoc hint that the *least* aligned quintile is best (exhaustion?), not pursued because of snooping | rejected |
 
-Total variants tried so far: 200.
+Total variants tried so far: 206.

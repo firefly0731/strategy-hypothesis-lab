@@ -44,6 +44,7 @@ class SessionMatrix:
     filled: np.ndarray           # bool, synthetic bars from outages
     tradable: np.ndarray         # (n_sessions,) False if the previous session had many outage bars
     pre_C: np.ndarray | None = None  # (n_sessions, n_pre) closes of the bars just BEFORE the open
+    TBV: np.ndarray | None = None    # taker (aggressive) buy volume per bar, base units
 
     @property
     def n(self) -> int:
@@ -97,6 +98,7 @@ def build_sessions(df: pd.DataFrame, spec: SessionSpec, max_filled_frac: float =
         # (Using this session's own outage share would peek at future bars.)
         tradable=np.concatenate([[True], filled[:-1].mean(axis=1) <= max_filled_frac]),
         # pre-open bars [start - n_pre, start): all closed by the session open
+        TBV=take("taker_buy_volume") if "taker_buy_volume" in df else None,
         pre_C=df["close"].to_numpy()[pos[:, :1] - n_pre + np.arange(n_pre)[None, :]] if n_pre else None,
     )
     # sanity: bar k of session i really is the kline opening at start + k

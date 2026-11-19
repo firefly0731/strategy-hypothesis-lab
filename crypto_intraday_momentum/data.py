@@ -57,7 +57,7 @@ def _fetch_zip_csv(url: str) -> pd.DataFrame | None:
 
 def _day_klines(symbol: str, day: str, cache: Path) -> pd.DataFrame | None:
     """Daily archive, used for the current month before its monthly file exists."""
-    path = cache / "klines_daily" / symbol / f"{symbol}-1m-{day}.parquet"
+    path = cache / "klines_daily_v2" / symbol / f"{symbol}-1m-{day}.parquet"
     if path.exists():
         return pd.read_parquet(path)
     df = _fetch_zip_csv(f"{DAILY}/klines/{symbol}/1m/{symbol}-1m-{day}.zip")
@@ -70,7 +70,7 @@ def _day_klines(symbol: str, day: str, cache: Path) -> pd.DataFrame | None:
 
 
 def _month_klines(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
-    path = cache / "klines" / symbol / f"{symbol}-1m-{month}.parquet"
+    path = cache / "klines_v2" / symbol / f"{symbol}-1m-{month}.parquet"
     if path.exists():
         return pd.read_parquet(path)
     df = _fetch_zip_csv(f"{BASE}/klines/{symbol}/1m/{symbol}-1m-{month}.zip")
@@ -95,6 +95,7 @@ def _clean_klines(df: pd.DataFrame) -> pd.DataFrame:
         "close": df["close"].astype(float),
         "volume": df["volume"].astype(float),
         "quote_volume": df["quote_volume"].astype(float),
+        "taker_buy_volume": df["taker_buy_volume"].astype(float),
     })
 
 
@@ -134,7 +135,8 @@ def load_klines(symbol: str, start: str, end: str, cache: Path = DEFAULT_CACHE,
     df["close"] = df["close"].ffill()
     for c in ("open", "high", "low"):
         df[c] = df[c].fillna(df["close"])
-    df[["volume", "quote_volume"]] = df[["volume", "quote_volume"]].fillna(0.0)
+    vol_cols = [c for c in ("volume", "quote_volume", "taker_buy_volume") if c in df]
+    df[vol_cols] = df[vol_cols].fillna(0.0)
     df.index.name = "open_time"
     return df
 

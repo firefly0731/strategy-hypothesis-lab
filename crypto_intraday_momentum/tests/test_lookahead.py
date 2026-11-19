@@ -23,8 +23,9 @@ def synth(start="2024-01-15", end="2024-04-20", seed=1, trend=True):
     l = np.minimum(o, c) - spread
     v = rng.uniform(5, 50, len(idx))
     qv = v * (h + l + c) / 3
+    tbv = v * np.clip(0.5 + np.sign(r) * 0.15 + rng.normal(0, 0.1, len(idx)), 0, 1)
     df = pd.DataFrame(dict(open=o, high=h, low=l, close=c, volume=v, quote_volume=qv,
-                           filled=False), index=idx)
+                           taker_buy_volume=tbv, filled=False), index=idx)
     df.index.name = "open_time"
     return df
 
@@ -39,6 +40,7 @@ def perturb_from(df, T, seed=99):
     d.loc[mask, "high"] = d.loc[mask, ["open", "high", "low", "close"]].max(axis=1) * 1.01
     d.loc[mask, "low"] = d.loc[mask, ["open", "high", "low", "close"]].min(axis=1) * 0.99
     d.loc[mask, "volume"] *= 7
+    d.loc[mask, "taker_buy_volume"] = d.loc[mask, "volume"] * rng.uniform(0, 1, mask.sum())
     d.loc[mask, "quote_volume"] *= 3
     return d
 
@@ -158,3 +160,23 @@ def test_mc_bands_ignore_future_bars(df, n_states):
     assert np.array_equal(s0.px[known], s1.px[known])
     assert np.isfinite(s0.ub[25:]).all()
     assert not np.allclose(s0.ub[i + 1:], s1.ub[i + 1:])   # later sessions do see the change
+
+
+def test_flow_features_ignore_future_bars(df):
+    from crypto_intraday_momentum.flow import flow_features
+    m0 = build_sessions(df, US)
+    i = m0.n // 2
+    s0 = compute_signals(m0)
+    T = m0.start_utc[i] + pd.Timedelta(minutes=int(s0.dec_min[4]))
+    m1 = build_sessions(perturb_from(df, T), US)
+    f0, f1 = flow_features(m0, s0.dec_min), flow_features(m1, s0.dec_min)
+    st = m0.start_utc.tz_convert(None).to_numpy().astype("datetime64[m]")
+    known = (st[:, None] + s0.dec_min.astype("timedelta64[m]")[None, :]) <= np.datetime64(T.tz_convert(None), "m")
+    for k in f0:
+        assert np.array_equal(f0[k][known], f1[k][known], equal_nan=True), k
+        assert not np.allclose(np.nan_to_num(f0[k][~known]), np.nan_to_num(f1[k][~known])), k
+    # imbalance definition on one cell
+    j = 2
+    sl = slice(0, int(s0.dec_min[j]))
+    v, b = m0.V[i, sl].sum(), m0.TBV[i, sl].sum()
+    assert np.isclose(f0["imb_open"][i, j], (2 * b - v) / v)
