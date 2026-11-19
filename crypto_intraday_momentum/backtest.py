@@ -44,6 +44,9 @@ class Config:
     # entry timing / confirmation (apply to NEW legs only; holding & stops unchanged)
     entry_cutoff_min: int | None = None   # no new entries at decision minutes >= this
     vwap_confirm_k: float = 0.0           # require side*(px/VWAP - 1) >= k * sigma
+    # holding past the reference close (sessions longer than the official close)
+    post_close_min: int | None = None     # minute of the reference close (e.g. 390 = 16:00 NY)
+    post_close_rule: str = "trail"        # trail | profit_only | hold
     # sizing
     sizing: str = "vol"                # vol | fixed
     target_vol: float = 0.02           # daily vol target (paper: 2%)
@@ -182,7 +185,13 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
             deadline = min(nxt, eod_start)
             p, ub, lb, vw = s.px[i, j], s.ub[i, j], s.lb[i, j], s.vwap[i, j]
 
-            if pos == 0:
+            post = cfg.post_close_min is not None and t >= cfg.post_close_min
+            if post and pos != 0 and cfg.post_close_rule == "hold":
+                continue                          # no stop after the close: exit at session end
+            if post and pos != 0 and cfg.post_close_rule == "profit_only" and t == cfg.post_close_min \
+                    and pos * (p / entry.price - 1.0) <= 0:
+                want = 0                          # losers are closed at the reference close
+            elif pos == 0:
                 want = 1 if p > ub else (-1 if p < lb else 0)
             elif pos == 1:
                 want = 1 if p >= max(ub, vw) else (-1 if p < lb else 0)

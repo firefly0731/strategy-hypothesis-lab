@@ -53,7 +53,11 @@ def _rolling_prior_mean(x: np.ndarray, lookback: int) -> np.ndarray:
 
 
 def compute_signals(m: SessionMatrix, lookback: int = 14, interval: int = 30,
-                    first: int = 30, vol_lookback: int = 14) -> Signals:
+                    first: int = 30, vol_lookback: int = 14,
+                    ref_close_min: int | None = None) -> Signals:
+    """ref_close_min: minute of the reference close used for prev_close / daily vol
+    (defaults to the session end). Set it to 390 when sessions are extended past
+    16:00 NY so that the entry signal is unchanged."""
     dm = decision_minutes(m.C.shape[1], interval, first)
     sess_open = m.O[:, 0]
     px = m.C[:, dm - 1]                                     # close of bar m-1
@@ -61,7 +65,7 @@ def compute_signals(m: SessionMatrix, lookback: int = 14, interval: int = 30,
     move = np.abs(px / sess_open[:, None] - 1.0)
     sigma = _rolling_prior_mean(move, lookback)              # prior sessions only
 
-    sess_close = m.C[:, -1]
+    sess_close = m.C[:, (ref_close_min or m.C.shape[1]) - 1]
     prev_close = np.concatenate([[np.nan], sess_close[:-1]])
     hi_ref = np.fmax(sess_open, prev_close)
     lo_ref = np.fmin(sess_open, prev_close)

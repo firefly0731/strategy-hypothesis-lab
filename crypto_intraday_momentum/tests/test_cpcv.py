@@ -64,3 +64,24 @@ def test_entry_cutoff_and_vwap_confirm():
     i, j, side = rv.trades["sess_idx"], rv.trades["dec_j"], rv.trades["side"]
     dist = side * (s.px[i, j] / s.vwap[i, j] - 1) / s.sigma[i, j]
     assert (dist >= 0.6 - 1e-12).all()
+
+
+def test_extended_session_keeps_entries():
+    from crypto_intraday_momentum.sessions import SessionSpec
+    df = synth()
+    m0 = build_sessions(df, US)
+    ext = SessionSpec("us_ext", "America/New_York", "09:30", 630, "xnys")   # to 20:00 NY
+    m1 = build_sessions(df, ext)
+    s0 = compute_signals(m0)
+    s1 = compute_signals(m1, ref_close_min=390)
+    k = len(s0.dec_min)
+    assert np.array_equal(s0.ub, s1.ub[:, :k], equal_nan=True)            # same bands pre-close
+    assert np.array_equal(s0.daily_vol, s1.daily_vol, equal_nan=True)
+    rules = dict(entry_cutoff_min=270, vwap_confirm_k=0.6)
+    r0 = run_backtest(m0, s0, Config(**rules))
+    for rule in ("trail", "profit_only", "hold"):
+        r1 = run_backtest(m1, s1, Config(post_close_min=390, post_close_rule=rule, **rules))
+        assert set(r0.trades["entry_time"]) == set(r1.trades["entry_time"]), rule
+        if rule == "hold":   # anything still open at 16:00 is held to the session end
+            late = r1.trades[r1.trades["exit_time"] > r1.trades["entry_time"].dt.normalize() + pd.Timedelta(hours=21)]
+            assert (late["exit_reason"] == "eod").all()
