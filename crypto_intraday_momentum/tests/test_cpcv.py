@@ -50,3 +50,17 @@ def test_cost_filter_only_removes_entries():
     assert np.isclose(rtc, 2 * (0.0005 + 1e-4))
     huge = run_backtest(m, s, Config(cost_filter_mult=1e6))
     assert len(huge.trades) == 0
+
+
+def test_entry_cutoff_and_vwap_confirm():
+    df = synth()
+    m = build_sessions(df, US)
+    s = compute_signals(m)
+    r = run_backtest(m, s, Config(entry_cutoff_min=270))
+    assert len(r.trades) and (r.trades["dec_min"] < 270).all()
+    base = run_backtest(m, s, Config())
+    rv = run_backtest(m, s, Config(vwap_confirm_k=0.6))
+    assert len(rv.trades) < len(base.trades)
+    i, j, side = rv.trades["sess_idx"], rv.trades["dec_j"], rv.trades["side"]
+    dist = side * (s.px[i, j] / s.vwap[i, j] - 1) / s.sigma[i, j]
+    assert (dist >= 0.6 - 1e-12).all()

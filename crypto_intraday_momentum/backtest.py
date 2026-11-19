@@ -41,6 +41,9 @@ class Config:
     # cost filter: open a new position only if the noise sigma at that decision
     # time is >= cost_filter_mult x estimated round-trip cost (0 disables)
     cost_filter_mult: float = 0.0
+    # entry timing / confirmation (apply to NEW legs only; holding & stops unchanged)
+    entry_cutoff_min: int | None = None   # no new entries at decision minutes >= this
+    vwap_confirm_k: float = 0.0           # require side*(px/VWAP - 1) >= k * sigma
     # sizing
     sizing: str = "vol"                # vol | fixed
     target_vol: float = 0.02           # daily vol target (paper: 2%)
@@ -185,8 +188,13 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
                 want = 1 if p >= max(ub, vw) else (-1 if p < lb else 0)
             else:
                 want = -1 if p <= min(lb, vw) else (1 if p > ub else 0)
-            if want != 0 and want != pos and s.sigma[i, j] < min_sigma:
-                want = 0                      # cost filter blocks the new leg only
+            if want != 0 and want != pos:     # filters block the new leg only
+                if s.sigma[i, j] < min_sigma:
+                    want = 0
+                elif cfg.entry_cutoff_min is not None and t >= cfg.entry_cutoff_min:
+                    want = 0
+                elif cfg.vwap_confirm_k > 0 and want * (p / vw - 1.0) < cfg.vwap_confirm_k * s.sigma[i, j]:
+                    want = 0
             if want == pos:
                 continue
 

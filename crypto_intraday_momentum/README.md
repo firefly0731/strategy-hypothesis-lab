@@ -89,3 +89,12 @@ starting state comes from the realised vol of the 60 minutes before the open. Ea
 bootstraps from the empirical pool of its state. With `n_states=1` the Markov structure is
 switched off (control). q = 0.79 matches the paper's σ width for Gaussian noise. RNG is
 seeded per session; the look-ahead perturbation test covers both variants.
+
+## Entry filters (`Config.entry_cutoff_min`, `Config.vwap_confirm_k`; `run_improve.py`)
+These filters come from the trade attribution in `analyze_trades.py`.
+- `entry_cutoff_min=270` opens no new position at or after 14:00 NY. Holding and stops are unchanged.
+- `vwap_confirm_k=0.6` opens a new position only if `side·(px/VWAP − 1) ≥ 0.6·σ`.
+
+`run_improve.py` validates them on the discovery set (BTC/ETH/SOL) and on a hold-out set
+(BNB/XRP/DOGE, not used to find the rules). It reports a 5×4 threshold sensitivity grid,
+CPCV over the grid, and yearly returns.
