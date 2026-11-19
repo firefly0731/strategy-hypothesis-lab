@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 crypto_intraday_momentum/results/
 crypto_range/results/
+crypto_xsec/results/
