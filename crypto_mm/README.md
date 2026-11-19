@@ -4,7 +4,7 @@
 |---|---|
 | `pilot.py` | data.binance.vision 아카이브로 USDC vs USDT 무기한 예비 분석 (`research/mm/06`) |
 | `collector.py` | **Binance USD-M 공개 시장데이터 수집기**. 출력 형식이 hftbacktest 원본 형식과 호환돼요 |
-| `collector.toml` | 수집 대상 설정. 기본값은 USDC 5종목 전체 호가 + USDT 5종목 체결·최우선호가 |
+| `collector.toml` | 수집 대상 설정. 기본값은 **ETH·SOL·XRP** USDC 전체 호가 + 같은 3종목 USDT 체결·최우선호가, 원본 보관 7일(변환 확인 후 삭제) |
 | `convert_day.py` | 하루치 수집 파일을 hftbacktest `.npz`로 바꾸고 피드 품질을 보고해요 |
 | `tests/test_collector.py` | 가짜 Binance(WebSocket + REST)로 하는 통합 테스트. hftbacktest 변환까지 검증해요 |
 
@@ -54,12 +54,19 @@
    ```
    등록과 로그 확인은 `sudo systemctl enable --now mm-collector`와 `journalctl -u mm-collector -f`로 해요.
 5. **디스크**
-   - 기록량을 미리 알 수는 없어요(미확인). 첫날 로그의 "MB written"으로 하루 용량을 확인하세요.
-   - 참고로 아카이브 기준 BTCUSDT bookTicker는 하루 약 267MB(zip)였어요. 증분 호가(`depth@0ms`)는 이보다 클 수 있어요.
-   - 디스크가 부족하면 `collector.toml`에서 종목이나 스트림을 줄이세요.
+   - 3종목 기준 원본은 **하루 약 3–4GB로 추정**해요(미확인).
+     - 근거: 2024-03 아카이브 zip 크기 × 2.5(JSON 오버헤드)
+     - USDT 최우선호가 약 1.3GB + USDC 최우선호가 약 0.4GB + USDC 증분 호가 1–2GB + 체결 약 0.25GB
+   - 정확한 값은 첫날 로그의 "MB written"으로 확인하세요.
+   - **원본 보관 정책**: `retention_days = 7`, `converted_dir = "./md_npz"`
+     - 7일이 지난 원본 폴더 중, 그날의 모든 종목에 `<converted_dir>/<symbol>_<day>.npz`가 있는 폴더만 지워요.
+     - 변환이 실패한 날은 지우지 않아요.
+     - 원본은 최대 약 7일분(약 25–30GB)만 남아요. npz 크기도 첫날 확인하세요.
+   - `min_free_gb`(기본 20)보다 여유 공간이 작아지면 로그에 `LOW DISK` 오류가 남아요.
+   - **`convert_day.py --out` 경로를 `converted_dir`과 같게 맞춰야** 원본이 삭제돼요.
 6. **일별 변환 (cron, UTC 00:30)**
    ```bash
-   30 0 * * * cd /home/ubuntu/270-Valuation && /home/ubuntu/mmenv/bin/python -m crypto_mm.convert_day --raw /data/md_raw --day $(date -u -d yesterday +\%Y\%m\%d) --out /data/md_npz >> /data/convert.log 2>&1
+   30 0 * * * cd /home/ubuntu/270-Valuation && /home/ubuntu/mmenv/bin/python -m crypto_mm.convert_day --raw /data/md_raw --day $(date -u -d yesterday +\%Y\%m\%d) --out /data/md_npz   # = converted_dir >> /data/convert.log 2>&1
    ```
 
 ## 알려진 한계

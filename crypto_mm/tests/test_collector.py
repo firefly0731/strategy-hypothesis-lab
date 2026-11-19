@@ -111,3 +111,25 @@ def test_collector_end_to_end(tmp_path):
     kinds = ev["ev"] & 0xFF
     assert (kinds == TRADE_EVENT).sum() == 3
     assert (kinds == DEPTH_SNAPSHOT_EVENT).sum() >= 4 * 3   # 4 levels per snapshot
+
+
+def test_prune_raw(tmp_path):
+    from crypto_mm.collector import prune_raw, Config
+    raw, npz = tmp_path / "raw", tmp_path / "npz"
+    for day in ("20261101", "20261110", "20261118"):
+        (raw / day).mkdir(parents=True)
+        (raw / day / "ethusdc.gz").write_bytes(b"x")
+        (raw / day / "solusdc.gz").write_bytes(b"x")
+    npz.mkdir()
+    (npz / "ethusdc_20261101.npz").write_bytes(b"x")          # 20261101 only half converted
+    for s in ("ethusdc", "solusdc"):
+        (npz / f"{s}_20261110.npz").write_bytes(b"x")         # 20261110 fully converted
+    assert prune_raw(str(raw), 0) == []                         # disabled
+    # 7-day retention: 1101 and 1110 are old enough, but only 1110 is fully converted
+    assert prune_raw(str(raw), 7, str(npz), today="20261119") == ["20261110"]
+    assert (raw / "20261101").exists() and (raw / "20261118").exists()
+    # without the conversion guard both old days go
+    assert prune_raw(str(raw), 7, "", today="20261119") == ["20261101"]
+    c = Config.load("crypto_mm/collector.toml")
+    assert set(c.symbols) == {"ETHUSDC", "SOLUSDC", "XRPUSDC", "ETHUSDT", "SOLUSDT", "XRPUSDT"}
+    assert c.retention_days == 7 and c.converted_dir == "./md_npz"

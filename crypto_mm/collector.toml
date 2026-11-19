@@ -6,16 +6,18 @@ snapshot_limit = 1000
 snapshot_every_s = 3600
 reconnect_every_s = 82800      # 23h; Binance closes connections after 24h
 
-# Maker venue: USDC perps with full diff depth.
-# Fair value: USDT perps with trades + best bid/ask only (saves disk). Add "depth@0ms" if needed.
+# Raw retention: delete raw day folders older than N days, but only once every symbol of that
+# day has been converted to <converted_dir>/<symbol>_<day>.npz (see convert_day.py). 0 = keep all.
+retention_days = 7
+converted_dir = "./md_npz"
+min_free_gb = 20
+
+# Candidates from research/mm/06 section 7: ETH, SOL, XRP (BTC and DOGE excluded).
+# Maker venue: USDC perps with full diff depth. Fair value: USDT perps, trades + best bid/ask.
 [symbols]
-BTCUSDC  = ["depth@0ms", "trade", "bookTicker"]
-ETHUSDC  = ["depth@0ms", "trade", "bookTicker"]
-SOLUSDC  = ["depth@0ms", "trade", "bookTicker"]
-XRPUSDC  = ["depth@0ms", "trade", "bookTicker"]
-DOGEUSDC = ["depth@0ms", "trade", "bookTicker"]
-BTCUSDT  = ["trade", "bookTicker"]
-ETHUSDT  = ["trade", "bookTicker"]
-SOLUSDT  = ["trade", "bookTicker"]
-XRPUSDT  = ["trade", "bookTicker"]
-DOGEUSDT = ["trade", "bookTicker"]
+ETHUSDC = ["depth@0ms", "trade", "bookTicker"]
+SOLUSDC = ["depth@0ms", "trade", "bookTicker"]
+XRPUSDC = ["depth@0ms", "trade", "bookTicker"]
+ETHUSDT = ["trade", "bookTicker"]
+SOLUSDT = ["trade", "bookTicker"]
+XRPUSDT = ["trade", "bookTicker"]

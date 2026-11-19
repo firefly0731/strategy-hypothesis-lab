@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import random
+import shutil
 import signal
 import time
 import tomllib
@@ -56,6 +57,11 @@ class Config:
     flush_every_s: float = 1.0
     stats_every_s: int = 60
     max_streams_per_conn: int = 150       # Binance limit is 200 per connection
+    # raw retention: delete <out_dir>/<YYYYMMDD> older than N days (0 = keep forever)
+    retention_days: int = 0
+    # if set, a raw day is deleted only when every <symbol>.gz has <converted_dir>/<symbol>_<day>.npz
+    converted_dir: str = ""
+    min_free_gb: float = 20.0             # log an error when free disk falls below this
 
     @classmethod
     def load(cls, path: str | None) -> "Config":
@@ -131,6 +137,32 @@ class DepthSequencer:
 
     def reset(self, symbol: str) -> None:
         self.last_u.pop(symbol, None)
+
+
+# ----------------------------------------------------------------------------- retention
+
+def prune_raw(out_dir: str, retention_days: int, converted_dir: str = "", today: str | None = None) -> list[str]:
+    """Delete raw day folders older than `retention_days` (UTC). With `converted_dir`, a day is
+    deleted only if every <symbol>.gz in it has a matching <symbol>_<day>.npz. Returns deleted days."""
+    if retention_days <= 0:
+        return []
+    root = Path(out_dir)
+    if not root.exists():
+        return []
+    today = today or time.strftime("%Y%m%d", time.gmtime())
+    t_today = time.mktime(time.strptime(today, "%Y%m%d"))
+    deleted = []
+    for d in sorted(p for p in root.iterdir() if p.is_dir() and p.name.isdigit() and len(p.name) == 8):
+        age_days = (t_today - time.mktime(time.strptime(d.name, "%Y%m%d"))) / 86400
+        if age_days <= retention_days:
+            continue
+        if converted_dir:
+            gzs = list(d.glob("*.gz"))
+            if not gzs or not all((Path(converted_dir) / f"{g.stem}_{d.name}.npz").exists() for g in gzs):
+                continue
+        shutil.rmtree(d)
+        deleted.append(d.name)
+    return deleted
 
 
 # ----------------------------------------------------------------------------- collector
@@ -254,6 +286,18 @@ class Collector:
                     log.warning("exchangeInfo failed: %r", e)
             await asyncio.sleep(600)
 
+    async def _housekeeping(self):
+        while not self.stop.is_set():
+            try:
+                for d in prune_raw(self.cfg.out_dir, self.cfg.retention_days, self.cfg.converted_dir):
+                    log.info("retention: deleted raw day %s", d)
+                free = shutil.disk_usage(self.cfg.out_dir).free / 1e9
+                if free < self.cfg.min_free_gb:
+                    log.error("LOW DISK: %.1f GB free (< %.1f GB)", free, self.cfg.min_free_gb)
+            except Exception as e:                              # noqa: BLE001
+                log.warning("housekeeping failed: %r", e)
+            await asyncio.sleep(3600)
+
     async def _flusher(self):
         while not self.stop.is_set():
             await asyncio.sleep(self.cfg.flush_every_s)
@@ -284,7 +328,7 @@ class Collector:
         tasks = [asyncio.create_task(self._run_connection(g)) for g in groups]
         tasks += [asyncio.create_task(x) for x in (self._snapshot_worker(), self._flusher(),
                                                    self._stats(), self._periodic_snapshots(),
-                                                   self._exchange_info())]
+                                                   self._exchange_info(), self._housekeeping())]
         await self.stop.wait()
         for t in tasks:
             t.cancel()
