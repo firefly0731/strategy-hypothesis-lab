@@ -147,9 +147,11 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
 
         pos, entry = 0, None
         n_tr = 0
+        e_info = {}          # decision index / kind of the open position
+        last_exit = None     # reason of the previous exit in this session
 
         def close_pos(fill: _Fill, reason: str):
-            nonlocal pos, entry, equity, n_tr
+            nonlocal pos, entry, equity, n_tr, last_exit
             side, e = pos, entry
             fee_rate_in = cfg.maker_fee if e.maker else cfg.taker_fee
             fee_rate_out = cfg.maker_fee if fill.maker else cfg.taker_fee
@@ -166,9 +168,11 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
                 gross=gross, fees=fees, funding=fund, pnl=pnl,
                 ret_notional=pnl / (qty * e.price), ret_equity=pnl / eq0,
                 hold_min=fill.bar - e.bar,
+                sess_idx=i, dec_j=e_info["j"], dec_min=int(dm[e_info["j"]]), entry_kind=e_info["kind"],
             ))
             pos, entry = 0, None
             n_tr += 1
+            last_exit = reason
 
         for j, t in enumerate(dm):
             nxt = dm[j + 1] if j + 1 < len(dm) else n_min
@@ -200,6 +204,8 @@ def run_backtest(m: SessionMatrix, s: Signals, cfg: Config,
                                        move_to_close=want * (m.C[i, -1] / p - 1.0)))
                 elif f.bar < n_min:
                     pos, entry = want, f
+                    e_info = {"j": j, "kind": ("first" if last_exit is None else
+                                               "flip" if last_exit == "flip" else "reentry")}
 
         if pos != 0:
             if cfg.exit_mode == "maker":
