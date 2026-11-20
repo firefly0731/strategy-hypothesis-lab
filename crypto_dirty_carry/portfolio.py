@@ -37,8 +37,20 @@ def _bars(span: str, bar: pd.Timedelta) -> int:
     return max(2, int(round(td(span) / bar)))
 
 
-def select_baskets(signal: pd.Series, cfg: StrategyConfig) -> tuple[list[str], list[str]]:
+def _pick(ranked: pd.Index, k: int, prev, buffer_mult: float | None) -> list[str]:
+    """Top k of `ranked`. With a buffer, names held last time stay while their rank is below
+    buffer_mult·k; the remaining slots go to the best-ranked names not yet chosen."""
+    if buffer_mult is None or not prev:
+        return list(ranked[:k])
+    zone = set(ranked[: int(math.floor(buffer_mult * k))])
+    keep = [x for x in ranked if x in zone and x in set(prev)][:k]
+    fill = [x for x in ranked if x not in set(keep)][: k - len(keep)]
+    return [x for x in ranked if x in set(keep) | set(fill)]
+
+
+def select_baskets(signal: pd.Series, cfg: StrategyConfig, prev_short=(), prev_long=()) -> tuple[list[str], list[str]]:
     """Short the highest carry, long the lowest. `signal` holds eligible names only.
+    prev_short / prev_long: the baskets of the previous decision (used by the rank buffer).
     Returns empty lists if either side has fewer than cfg.min_names_per_side names."""
     s = signal.dropna()
     n = len(s)
@@ -48,11 +60,11 @@ def select_baskets(signal: pd.Series, cfg: StrategyConfig) -> tuple[list[str], l
     desc = s.sort_values(ascending=False, kind="stable")
     if cfg.short_min_signal is not None:
         desc = desc[desc > cfg.short_min_signal]
-    short = list(desc.index[:k])
+    short = _pick(desc.index, k, prev_short, cfg.buffer_mult)
     asc = s.drop(index=short).sort_values(ascending=True, kind="stable")
     if cfg.long_max_signal is not None:
         asc = asc[asc < cfg.long_max_signal]
-    long = list(asc.index[:k])
+    long = _pick(asc.index, k, prev_long, cfg.buffer_mult)
     if len(short) < cfg.min_names_per_side or len(long) < cfg.min_names_per_side:
         return [], []
     return short, long
@@ -170,7 +182,8 @@ def scale_to_vol(w: pd.Series, returns: pd.DataFrame, target_vol: float, bars_pe
     return w * c, c
 
 
-def compute_targets(snap: Snapshot, cfg: StrategyConfig) -> Targets:
+def compute_targets(snap: Snapshot, cfg: StrategyConfig, prev: "Targets | None" = None) -> Targets:
+    """prev: the previous decision (only its baskets are used, by the rank buffer)."""
     t = snap.t
     syms = snap.close.columns
     zeros = pd.Series(0.0, index=syms)
@@ -211,7 +224,9 @@ def compute_targets(snap: Snapshot, cfg: StrategyConfig) -> Targets:
         return Targets(t, f"flat:{reason}", zeros, zeros.copy(), fz, fz.copy(),
                        signal=signal, vol=vol, betas=betas)
 
-    short, long = select_baskets(signal[eligible], cfg)
+    short, long = select_baskets(signal[eligible], cfg,
+                                 prev.short if prev is not None else (),
+                                 prev.long if prev is not None else ())
     if not short:
         return flat("baskets")
     w_raw = basket_weights(short, long, vol, syms, cfg)

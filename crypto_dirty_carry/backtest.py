@@ -47,7 +47,7 @@ def compute_schedule(data: MarketData, cfg: StrategyConfig) -> list[Targets]:
         if t < first_ok:
             continue
         snap = data.snapshot(t, cfg.lookback, cfg.funding_history)
-        out.append(compute_targets(snap, cfg))
+        out.append(compute_targets(snap, cfg, out[-1] if out else None))
     return out
 
 

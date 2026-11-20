@@ -57,6 +57,7 @@ class StrategyConfig:
     short_min_signal: float | None = 0.0   # short only if carry > this (None: no condition)
     long_max_signal: float | None = 0.0    # long only if carry < this (None: no condition)
     min_names_per_side: int = 1       # otherwise stay flat at this decision
+    buffer_mult: float | None = None  # rank buffer: a held name stays while ranked < buffer_mult·k on its side
 
     # --- eligibility ----------------------------------------------------------------------
     min_history: str = "30D"          # the name must have prices over this span
@@ -109,6 +110,8 @@ class StrategyConfig:
             raise ValueError("exec_lag_bars must be >= 0")
         if self.min_funding_events < 2:
             raise ValueError("min_funding_events must be >= 2 (one interval needs two settlements)")
+        if self.buffer_mult is not None and self.buffer_mult < 1:
+            raise ValueError("buffer_mult must be >= 1")
         if self.min_names_per_side < 1:
             raise ValueError("min_names_per_side must be >= 1")
         if not 0 < self.min_obs_frac <= 1:

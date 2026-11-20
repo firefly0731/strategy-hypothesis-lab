@@ -2,7 +2,7 @@
 
 | # | Source | Variants | Result | Decision |
 |---|--------|----------|--------|----------|
-| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 6 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0 | open (no adoption gate passed) |
+| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 9 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0. Daily + rank buffer 2K: Sharpe 0.84 (t ≈ 1.4), in-sample after 9 trials | open (no adoption gate passed) |
 
 ## C1 runs: Binance USDC-M, 2024-01 .. 2026-10, 1h bars
 
@@ -39,6 +39,34 @@ Observations:
 - **Every variant improved.** The best is relative/projection: Sharpe 0.61, CAGR +11.2%, MDD −35%, with yearly returns of +19.9% (2024), +21.0% (2025) and −8.6% (2026 YTD).
 - **The result is not significant.** Sharpe 0.61 over 2.66 years gives t ≈ 1.0. Six configurations have been tried so far, so a deflated-Sharpe correction applies. Nothing has been held out.
 - **Next, by pre-commitment:** cut the remaining turnover through the signal, not the clock. Options are a longer carry lookback, or a rank buffer that keeps a name until it leaves the top/bottom 2K.
+
+### C1c: signal-side turnover cuts (base: relative, projection, daily; fixed before the run)
+
+A = 7-day carry lookback (was 3D). B = rank buffer: a held name stays while ranked within 2K. C = A + B.
+
+| Config | Book | CAGR | Sharpe (bar / daily) | MDD | Funding | Price | Cost | Turnover/yr | Ex-post BTC β (t) |
+|---|---|---|---|---|---|---|---|---|---|
+| Base (C1b best) | hedged | +11.2% | 0.61 / 0.58 | −35.4% | +0.48 | +0.20 | −0.36 | 103× | −0.025 (−1.6) |
+| A: 7D lookback | hedged | +1.4% | 0.17 / 0.18 | −43.5% | +0.45 | −0.20 | −0.21 | 67× | −0.010 (−0.6) |
+| | raw | +3.6% | 0.27 / 0.27 | −47.8% | +0.49 | −0.18 | −0.22 | 60× | −0.097 (−5.5) |
+| B: buffer 2K | hedged | +16.2% | 0.84 / 0.80 | −20.9% | +0.43 | +0.24 | −0.18 | 52× | −0.010 (−0.7) |
+| | raw | +14.7% | 0.73 / 0.71 | −22.3% | +0.43 | +0.18 | −0.17 | 47× | −0.081 (−5.1) |
+| C: 7D + buffer | hedged | +7.7% | 0.46 / 0.45 | −34.1% | +0.37 | −0.05 | −0.10 | 30× | +0.007 (+0.5) |
+| | raw | +12.4% | 0.62 / 0.60 | −35.1% | +0.41 | +0.06 | −0.10 | 28× | −0.086 (−5.1) |
+
+Yearly returns of the hedged books:
+
+| Config | 2024 | 2025 | 2026 YTD |
+|---|---|---|---|
+| A | +23.0% | +3.0% | −18.0% |
+| B | +31.1% | +1.1% | +12.4% |
+| C | +16.3% | +11.5% | −6.1% |
+
+Observations:
+- **Both cuts reduce turnover as intended.** Annual turnover falls from 103× to 67× (A), 52× (B) and 30× (C), and costs fall from −0.36 to between −0.21 and −0.10.
+- **Funding collected is stable** across all variants, at +0.37 to +0.48.
+- **Performance is not monotonic in turnover.** C has the lowest cost but a lower Sharpe than B. The differences come from price PnL, which swings between −0.20 and +0.24 across variants, more than the cost savings. So the ranking between variants is mostly noise in the price component, not a cost effect.
+- **B is the best so far:** Sharpe 0.84, t ≈ 1.4, MDD −21%. It was chosen after seeing 9 configurations on the same sample, so it must be treated as in-sample. A deflated-Sharpe correction over 9 trials and a hold-out (time split, or a USDT-M universe the rules were not tuned on) are required before reading anything into it.
 
 (Re-run 2026-11-20 after the code review fixes: hedge instruments are no longer basket names,
 outages are held instead of closed, post-cost sizing. Flat decisions in the relative runs are

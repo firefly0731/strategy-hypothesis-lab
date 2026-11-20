@@ -114,6 +114,16 @@ def test_select_baskets_thresholds_and_flat():
     assert select_baskets(pos_only, rel) == (["a"], ["c"])    # relative carry when allowed
 
 
+def test_rank_buffer_keeps_held_names_inside_2k():
+    s = pd.Series({f"n{i}": v for i, v in enumerate([9, 8, 7, 6, 5, 4, -4, -5, -6, -7, -8, -9])}) * 1e-4
+    cfg = StrategyConfig(k=2, buffer_mult=2.0)
+    # n3 (rank 4 of shorts) was held: kept, because 4 ≤ 2k; n5 (rank 6) was held: dropped
+    short, long = select_baskets(s, cfg, prev_short=("n3", "n5"), prev_long=("n8",))
+    assert short == ["n0", "n3"]
+    assert long == ["n11", "n8"]
+    assert select_baskets(s, StrategyConfig(k=2), ("n3", "n5"), ("n8",)) == (["n0", "n1"], ["n11", "n10"])
+
+
 def test_flat_when_no_negative_funding(data):
     f = data.funding.copy()
     f["rate"] = f["rate"].abs()

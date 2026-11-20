@@ -33,6 +33,8 @@ def main(argv=None):
                     help="drop the sign conditions: short the top-k and long the bottom-k carry")
     ap.add_argument("--mode", default="projection", choices=["projection", "hedge"])
     ap.add_argument("--rebalance", default="8h", help="decision interval, e.g. 8h or 1D")
+    ap.add_argument("--lookback", default="3D", help="funding carry lookback, e.g. 3D or 7D")
+    ap.add_argument("--buffer", type=float, default=None, help="rank buffer multiple of k, e.g. 2")
     a = ap.parse_args(argv)
 
     uni = binance_universe(a.quote)
@@ -40,7 +42,8 @@ def main(argv=None):
     btc = f"BTC{a.quote}"
     data = from_binance(symbols, a.start, a.end, bar=a.bar, factor_map={"BTC": btc})
     cfg = StrategyConfig(k=a.k, hedge_instruments=(btc,), costs=CostConfig.binance(a.quote),
-                         neutral_mode=a.mode, rebalance_every=a.rebalance)
+                         neutral_mode=a.mode, rebalance_every=a.rebalance,
+                         funding_lookback=a.lookback, buffer_mult=a.buffer)
     if a.relative:
         cfg = replace(cfg, short_min_signal=None, long_max_signal=None)
     schedule = compute_schedule(data, cfg)
@@ -60,7 +63,7 @@ def main(argv=None):
     for k, r in runs.items():
         print(k, "\n", r.betas.round(3).to_string())
     OUT.mkdir(parents=True, exist_ok=True)
-    tag = f"{a.quote}_{a.start}_{a.end}_{a.bar}_{a.mode}{'_rel' if a.relative else ''}_rb{a.rebalance}"
+    tag = f"{a.quote}_{a.start}_{a.end}_{a.bar}_{a.mode}{'_rel' if a.relative else ''}_rb{a.rebalance}_lb{a.lookback}_buf{a.buffer}"
     print("\ndecision status:", ex["status"].value_counts().to_dict())
     print("yearly net return:\n", runs["hedged"].bars["ret"].groupby(runs["hedged"].bars.index.year)
           .apply(lambda r: (1 + r).prod() - 1).round(4).to_string())

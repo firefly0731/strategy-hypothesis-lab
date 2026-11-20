@@ -46,6 +46,20 @@ def test_decisions_up_to_T_ignore_the_future():
     assert any(not ta.w.equals(tb.w) for ta, tb in zip(a, b) if ta.t > T)
 
 
+def test_buffered_schedule_ignores_the_future():
+    from dataclasses import replace
+    cfg = replace(CFG, buffer_mult=2.0, funding_lookback="7D", rebalance_every="1D")
+    d = make_data(n_days=120)
+    T = d.close.index[len(d.close) * 4 // 5]
+    a, b = compute_schedule(d, cfg), compute_schedule(perturb_after(d, T), cfg)
+    n = 0
+    for ta, tb in zip(a, b):
+        if ta.t <= T:
+            n += 1
+            pd.testing.assert_series_equal(ta.w, tb.w)
+    assert n > 10
+
+
 def test_equity_up_to_T_ignores_the_future():
     d = make_data(n_days=120)
     T = d.close.index[len(d.close) * 4 // 5]
