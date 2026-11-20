@@ -12,3 +12,5 @@ crypto_mm/data_cache/
 crypto_mm/results/
 crypto_dirty_carry/data_cache/
 crypto_dirty_carry/results/
+crypto_cash_carry/reports/*.parquet
+crypto_cash_carry/reports/*.log

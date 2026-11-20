@@ -285,18 +285,33 @@ def _month_funding(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
     return out
 
 
-def _klines(symbol: str, interval: str, start: str, end: str, cache: Path) -> pd.DataFrame | None:
+SPOT_BASE = "https://data.binance.vision/data/spot/monthly"
+SPOT_DAILY = "https://data.binance.vision/data/spot/daily"
+
+
+def _klines(symbol: str, interval: str, start: str, end: str, cache: Path,
+            market: str = "um") -> pd.DataFrame | None:
+    """Monthly kline archives: market "um" (USDⓈ-M futures, default), "spot" or "mark" (mark price)."""
     from crypto_intraday_momentum.data import BASE, DAILY, _clean_klines
 
+    kind = "klines"
+    if market == "spot":
+        BASE, DAILY, sub = SPOT_BASE, SPOT_DAILY, f"klines_spot_{interval}"
+    elif market == "um":
+        sub = f"klines_{interval}"
+    elif market == "mark":                          # USDⓈ-M mark price klines (volume columns are 0)
+        kind, sub = "markPriceKlines", f"mark_{interval}"
+    else:
+        raise ValueError("market must be 'um', 'spot' or 'mark'")
     parts = []
     now = pd.Timestamp.now(tz="UTC")
     recent = pd.Period(now.tz_localize(None), freq="M") - 1   # monthly file may not be published yet
     for month in pd.period_range(start, end, freq="M").strftime("%Y-%m"):
-        path = cache / f"klines_{interval}" / symbol / f"{month}.parquet"
+        path = cache / sub / symbol / f"{month}.parquet"
         if path.exists():
             parts.append(pd.read_parquet(path))
             continue
-        df = _fetch(f"{BASE}/klines/{symbol}/{interval}/{symbol}-{interval}-{month}.zip")
+        df = _fetch(f"{BASE}/{kind}/{symbol}/{interval}/{symbol}-{interval}-{month}.zip")
         if df is not None:
             out = _clean_klines(df)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -308,7 +323,7 @@ def _klines(symbol: str, interval: str, start: str, end: str, cache: Path) -> pd
         days = pd.date_range(month + "-01", periods=pd.Period(month).days_in_month, freq="D")
         days = days[days < now.tz_localize(None).normalize()]
         for d in days.strftime("%Y-%m-%d"):         # current month: daily archives, not cached
-            dd = _fetch(f"{DAILY}/klines/{symbol}/{interval}/{symbol}-{interval}-{d}.zip")
+            dd = _fetch(f"{DAILY}/{kind}/{symbol}/{interval}/{symbol}-{interval}-{d}.zip")
             if dd is not None:
                 parts.append(_clean_klines(dd))
     parts = [p for p in parts if len(p)]
