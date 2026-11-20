@@ -10,3 +10,5 @@ crypto_grid/results/
 research/mm/sources/
 crypto_mm/data_cache/
 crypto_mm/results/
+crypto_dirty_carry/data_cache/
+crypto_dirty_carry/results/
