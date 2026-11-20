@@ -45,7 +45,7 @@
    Description=Binance USD-M market data collector
    After=network-online.target
    [Service]
-   WorkingDirectory=/home/ubuntu/270-Valuation
+   WorkingDirectory=/home/ubuntu/strategy-hypothesis-lab
    ExecStart=/home/ubuntu/mmenv/bin/python -m crypto_mm.collector --config crypto_mm/collector.toml --out /data/md_raw
    Restart=always
    RestartSec=5
@@ -67,7 +67,7 @@
 6. **일별 변환 (cron, UTC 00:30)**
    `--out` 경로는 `collector.toml`의 `converted_dir`과 **같아야** 해요. 다르면 원본이 지워지지 않아요. 서버에서는 설정 파일을 `out_dir = "/data/md_raw"`, `converted_dir = "/data/md_npz"`로 바꿔 주세요.
    ```bash
-   30 0 * * * cd /home/ubuntu/270-Valuation && /home/ubuntu/mmenv/bin/python -m crypto_mm.convert_day --raw /data/md_raw --day $(date -u -d yesterday +\%Y\%m\%d) --out /data/md_npz >> /data/convert.log 2>&1
+   30 0 * * * cd /home/ubuntu/strategy-hypothesis-lab && /home/ubuntu/mmenv/bin/python -m crypto_mm.convert_day --raw /data/md_raw --day $(date -u -d yesterday +\%Y\%m\%d) --out /data/md_npz >> /data/convert.log 2>&1
    ```
 
 ## 알려진 한계

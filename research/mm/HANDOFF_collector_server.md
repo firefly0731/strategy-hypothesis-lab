@@ -8,7 +8,7 @@ AWS 도쿄 EC2에서 실행하는 새 Claude Code 세션에 아래 내용을 그
 
 ## 배경
 - 이 서버는 AWS 도쿄(ap-northeast-1) EC2(Ubuntu)야. 목적은 Binance USDC-M 무기한 선물에서 양방향 메이커 MM 전략을 검증할 백테스트 데이터를 1~2주간 직접 수집하는 거야.
-- 저장소: 270-Valuation, 브랜치 `claude/sharp-cannon-qxbvty`. 지금까지의 리서치와 코드는 모두 이 브랜치에 있어.
+- 저장소: `firefly0731/strategy-hypothesis-lab`, 브랜치 `main`. 지금까지의 리서치와 코드는 모두 이 브랜치에 있어.
 - 먼저 읽을 문서
   - `crypto_mm/README.md`: 수집기 구조, 배포 절차, 디스크·보관 정책
   - `research/mm/06_usdc_perp_pilot.md`: 대상 종목 선정 근거. 후보는 ETH, SOL, XRP이고, 수수료는 메이커 0bp, 테이커 4bp

@@ -7,7 +7,7 @@ AWS 도쿄 서버에서 실행하는 새 Claude Code 세션에 아래 내용을 
 # 작업: 인트라데이 모멘텀 전략(검증 완료 구성)을 Binance USDⓈ-M 선물 실거래 시스템으로 구현하고 단계적으로 가동
 
 ## 배경
-- 저장소 270-Valuation, 브랜치 `claude/sharp-cannon-qxbvty`.
+- 저장소 `firefly0731/strategy-hypothesis-lab`, 브랜치 `main`.
 - 백테스트·검증 코드는 `crypto_intraday_momentum/`에 있어. 아래 문서를 먼저 읽어.
   - `README.md`: 규칙, look-ahead 방지
   - `IDEAS_LOG.md`: 채택/기각 이력
