@@ -17,6 +17,7 @@ import pandas as pd
 from .backtest import compute_schedule, run_backtest
 from .config import CostConfig, StrategyConfig
 from .data import binance_archive_symbols, binance_universe, from_binance, non_coin_symbols
+from .risk import RiskConfig, run_managed
 
 OUT = Path(__file__).resolve().parent / "results"
 
@@ -40,6 +41,9 @@ def main(argv=None):
                          "kline archive, delisted included, minus TradFi/index contracts (point in time)")
     ap.add_argument("--top-n", type=int, default=None, help="liquidity rank filter at each decision")
     ap.add_argument("--min-qv", type=float, default=0.0, help="min 30D median quote volume per bar")
+    ap.add_argument("--risk", default="none", choices=["none", "timing", "full"],
+                    help="timing: settlement-aware execution only; full: timing + stops + drawdown floor "
+                         "(RiskConfig defaults)")
     a = ap.parse_args(argv)
 
     if a.symbols:
@@ -58,9 +62,13 @@ def main(argv=None):
                          liquidity_top_n=a.top_n, min_median_quote_volume=a.min_qv)
     if a.relative:
         cfg = replace(cfg, short_min_signal=None, long_max_signal=None)
-    schedule = compute_schedule(data, cfg)
-    runs = {"hedged": run_backtest(data, cfg, "hedged", schedule=schedule),
-            "raw": run_backtest(data, cfg, "raw", schedule=schedule)}
+    if a.risk == "none":
+        schedule = compute_schedule(data, cfg)
+        runs = {"hedged": run_backtest(data, cfg, "hedged", schedule=schedule),
+                "raw": run_backtest(data, cfg, "raw", schedule=schedule)}
+    else:
+        risk = RiskConfig.off(timing=True) if a.risk == "timing" else RiskConfig()
+        runs = {k: run_managed(data, cfg, risk, k) for k in ("hedged", "raw")}
 
     pd.set_option("display.width", 200)
     print(f"universe: {len(data.symbols)} {a.quote} perps with data, {data.close.index[0]} .. "
@@ -75,7 +83,7 @@ def main(argv=None):
     for k, r in runs.items():
         print(k, "\n", r.betas.round(3).to_string())
     OUT.mkdir(parents=True, exist_ok=True)
-    tag = f"{a.quote}_{a.start}_{a.end}_{a.bar}_{a.mode}{'_rel' if a.relative else ''}_rb{a.rebalance}_lb{a.lookback}_buf{a.buffer}_{a.universe}_top{a.top_n}"
+    tag = f"{a.quote}_{a.start}_{a.end}_{a.bar}_{a.mode}{'_rel' if a.relative else ''}_rb{a.rebalance}_lb{a.lookback}_buf{a.buffer}_{a.universe}_top{a.top_n}_risk{a.risk}"
     print("\ndecision status:", ex["status"].value_counts().to_dict())
     print("yearly net return:\n", runs["hedged"].bars["ret"].groupby(runs["hedged"].bars.index.year)
           .apply(lambda r: (1 + r).prod() - 1).round(4).to_string())

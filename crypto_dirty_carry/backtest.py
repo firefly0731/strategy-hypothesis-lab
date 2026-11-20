@@ -151,7 +151,8 @@ def simulate(data: MarketData, orders: pd.DataFrame, costs: CostConfig,
             c = np.abs(dw).sum() * E * rate
             E -= c
             n_new = w_t * E                          # target weights of post-cost equity
-            n_new[stuck] = n[stuck]
+            same = dw == 0                           # untraded names keep their notional exactly
+            n_new[same] = n[same]
             n = n_new
             cst += c
             to += 0.5 * np.abs(dw).sum()
@@ -267,7 +268,15 @@ def run_backtest(data: MarketData, cfg: StrategyConfig, use: str = "hedged",
         schedule = compute_schedule(data, cfg)
     orders = orders_from_schedule(data, schedule, cfg.exec_lag_bars, use)
     bars, weights = simulate(data, orders, cfg.costs, cfg.hedge_instruments, initial_equity)
-    live = bars.index >= orders.index[0] if len(orders) else np.zeros(len(bars), dtype=bool)
+    first = orders.index[0] if len(orders) else None
+    return summarize_run(data, cfg, bars, weights, schedule, first, orders)
+
+
+def summarize_run(data: MarketData, cfg: StrategyConfig, bars: pd.DataFrame, weights: pd.DataFrame,
+                  schedule: list[Targets], first_exec, orders: pd.DataFrame | None = None) -> BacktestResult:
+    """Metrics, attribution, exposure report and ex-post betas from the first execution onwards."""
+    orders = pd.DataFrame() if orders is None else orders
+    live = bars.index >= first_exec if first_exec is not None else np.zeros(len(bars), dtype=bool)
     # metrics start at the bar before the first execution (equity before any trade)
     if live.any():
         start = max(0, int(np.argmax(live)) - 1)

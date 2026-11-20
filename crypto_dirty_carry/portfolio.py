@@ -182,8 +182,10 @@ def scale_to_vol(w: pd.Series, returns: pd.DataFrame, target_vol: float, bars_pe
     return w * c, c
 
 
-def compute_targets(snap: Snapshot, cfg: StrategyConfig, prev: "Targets | None" = None) -> Targets:
-    """prev: the previous decision (only its baskets are used, by the rank buffer)."""
+def compute_targets(snap: Snapshot, cfg: StrategyConfig, prev: "Targets | None" = None,
+                    exclude=()) -> Targets:
+    """prev: the previous decision (only its baskets are used, by the rank buffer).
+    exclude: names that may not enter a basket now (e.g. in a stop-loss cooldown)."""
     t = snap.t
     syms = snap.close.columns
     zeros = pd.Series(0.0, index=syms)
@@ -223,7 +225,7 @@ def compute_targets(snap: Snapshot, cfg: StrategyConfig, prev: "Targets | None" 
     base_ok = base_ok & vol.notna() & beta_ok
     # hedge instruments are hedge legs only: never basket names (keeps caps, sign rule and the
     # hedge PnL attribution unambiguous)
-    eligible = base_ok & signal.notna() & ~syms.isin(list(cfg.hedge_instruments))
+    eligible = base_ok & signal.notna() & ~syms.isin(list(cfg.hedge_instruments)) & ~syms.isin(list(exclude))
 
     def flat(reason):
         return Targets(t, f"flat:{reason}", zeros, zeros.copy(), fz, fz.copy(),
