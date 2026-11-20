@@ -2,7 +2,7 @@
 
 | # | Source | Variants | Result | Decision |
 |---|--------|----------|--------|----------|
-| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 3 configs × {raw, hedged} = 6 (below) | Not profitable net of costs in any variant; see C1 runs | open (no adoption gate passed) |
+| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 6 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0 | open (no adoption gate passed) |
 
 ## C1 runs: Binance USDC-M, 2024-01 .. 2026-10, 1h bars
 
@@ -22,6 +22,23 @@ Every variant ran on one schedule for both books: "hedged" trades the factor-neu
 | | raw | +5.8% | 0.36 / 0.35 | −49.1% | +0.52 | +0.12 | −0.48 | 140× | −0.085 (−5.2) | |
 | Relative, hedge legs (BTCUSDC) | hedged | +7.3% | 0.43 / 0.42 | −53.9% | +0.56 | +0.21 | −0.57 | 155× | −0.013 (−0.8) | 68 |
 | | raw | +5.6% | 0.36 / 0.35 | −49.2% | +0.52 | +0.11 | −0.47 | 140× | −0.085 (−5.2) | |
+
+### C1b: daily rebalance (rebalance_every = 1D at 00:00 UTC; everything else unchanged, fixed before the run)
+
+| Config | Book | CAGR | Sharpe (bar / daily) | MDD | Funding | Price | Cost | Turnover/yr | Ex-post BTC β (t) | Flat decisions |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Spec signs, projection | hedged | −2.4% | 0.01 / 0.02 | −37.6% | +0.43 | −0.20 | −0.28 | 98× | −0.024 (−1.4) | 86 / 972 |
+| | raw | −6.9% | −0.18 / −0.16 | −37.2% | +0.40 | −0.33 | −0.24 | 90× | −0.062 (−3.6) | |
+| Relative, projection | hedged | +11.2% | 0.61 / 0.58 | −35.4% | +0.48 | +0.20 | −0.36 | 103× | −0.025 (−1.6) | 23 |
+| | raw | +8.1% | 0.46 / 0.44 | −32.2% | +0.45 | +0.09 | −0.31 | 94× | −0.091 (−5.4) | |
+| Relative, hedge legs | hedged | +8.9% | 0.49 / 0.48 | −39.1% | +0.47 | +0.15 | −0.36 | 104× | −0.017 (−1.0) | 23 |
+| | raw | +8.1% | 0.46 / 0.44 | −32.2% | +0.45 | +0.09 | −0.31 | 94× | −0.091 (−5.4) | |
+
+Observations:
+- **Costs fell but less than the decision count.** There are 3× fewer decisions but each one turns over about 0.29 of equity one-way, against 0.15 at 8h, so annual turnover only falls from about 155× to about 100×. The 3-day carry ranking reshuffles a lot from one day to the next. Funding collected barely changed (−0.04 to −0.09).
+- **Every variant improved.** The best is relative/projection: Sharpe 0.61, CAGR +11.2%, MDD −35%, with yearly returns of +19.9% (2024), +21.0% (2025) and −8.6% (2026 YTD).
+- **The result is not significant.** Sharpe 0.61 over 2.66 years gives t ≈ 1.0. Six configurations have been tried so far, so a deflated-Sharpe correction applies. Nothing has been held out.
+- **Next, by pre-commitment:** cut the remaining turnover through the signal, not the clock. Options are a longer carry lookback, or a rank buffer that keeps a name until it leaves the top/bottom 2K.
 
 (Re-run 2026-11-20 after the code review fixes: hedge instruments are no longer basket names,
 outages are held instead of closed, post-cost sizing. Flat decisions in the relative runs are
