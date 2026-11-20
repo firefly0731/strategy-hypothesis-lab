@@ -105,7 +105,12 @@ def to_bar_grid(events: dict[str, pd.DataFrame], index: pd.DatetimeIndex, symbol
     return up, dn
 
 
-def exit_signals(symbols, start: str, end: str, index: pd.DatetimeIndex, kind: str):
+def exit_signals(symbols, start: str, end: str, index: pd.DatetimeIndex, kind: str, columns=None):
+    """Signals for `symbols` on a (index × columns) grid; columns default to `symbols`.
+
+    Pass columns=data.symbols so the arrays line up with the engine; names in columns but not in
+    symbols (hedge legs, names without funding) get no events.
+    """
     data = load_30m(symbols, start, end)
     ev = {s: breakouts(d, kind) for s, d in data.items()}
-    return to_bar_grid(ev, index, list(symbols))
+    return to_bar_grid(ev, index, list(symbols if columns is None else columns))

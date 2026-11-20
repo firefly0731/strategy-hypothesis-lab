@@ -61,6 +61,15 @@ def test_grid_maps_to_first_bar_close_at_or_after_event():
     assert up.sum() == 1 and dn.sum() == 1 and not up[:, 1].any()
 
 
+def test_grid_columns_follow_engine_symbols_not_event_names():
+    # events only for a subset (no hedge leg), grid must still span every engine symbol
+    idx = pd.date_range("2024-01-01 01:00", periods=10, freq="1h", tz="UTC")
+    ev = {"B": pd.DataFrame({"up": [True], "down": [False]},
+                            index=pd.DatetimeIndex(["2024-01-01 02:00"], tz="UTC"))}
+    up, dn = to_bar_grid(ev, idx, ["A", "B", "BTC"])
+    assert up.shape == (10, 3) and up[1, 1] and up.sum() == 1 and not dn.any()
+
+
 def test_engine_exits_short_on_upside_break_and_waits_for_next_decision():
     d = make_data(n_days=100)
     base = run_managed(d, CFG, RiskConfig.off(timing=True))

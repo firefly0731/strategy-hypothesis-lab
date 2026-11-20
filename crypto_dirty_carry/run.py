@@ -77,7 +77,8 @@ def main(argv=None):
         up = dn = None
         if a.exit_signal != "none":
             cands = sorted(set(data.funding["symbol"]) - set(cfg.hedge_instruments))
-            up, dn = exit_signals(cands, a.start, a.end, data.close.index, a.exit_signal)
+            up, dn = exit_signals(cands, a.start, a.end, data.close.index, a.exit_signal,
+                                  columns=list(data.symbols))
             print(f"momentum exit signals ({a.exit_signal}) for {len(cands)} names: "
                   f"{int(up.sum())} upside / {int(dn.sum())} downside break bars")
         runs = {k: run_managed(data, cfg, risk, k, exit_up=up, exit_down=dn) for k in ("hedged", "raw")}

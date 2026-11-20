@@ -199,6 +199,58 @@ Reading:
 - **The strategy is still not profitable after 2023.** The 2024–2026 Sharpe is −0.84 with loss limits in place. Funding collected (+0.39 in that period) is smaller than price losses (−0.70), even with stops.
 - **Variant count: 13 configurations.**
 
+### C1g: narrow universe (365D history, top-20, timing + limits)
+
+| Book | CAGR | Sharpe | MDD |
+|---|---|---|---|
+| Hedged | −4.9% | −0.18 | −33% |
+| Raw | +10.7% | 0.61 | −19% |
+
+- Smaller drawdowns than top-40, but the hedged book loses money. The projection re-weighting hurt most in 2022.
+- Variant count: 14.
+
+### Combination with the intraday momentum strategy (daily returns, 50/50)
+
+| Pair | Correlation | Momentum alone | 50/50 |
+|---|---|---|---|
+| Momentum + C1f timing + limits | −0.006 | Sharpe 1.29 | Sharpe 1.02 |
+| Momentum + C1g narrow | ≈ 0 | Sharpe 1.33 | Sharpe 0.80 |
+
+- Uncorrelated, but carry's Sharpe is too low to improve the mix. Gate failed: no allocation to carry.
+
+### C1h: noise-band breakout as a carry exit (US session / UTC day)
+
+The rule: a short leaves on an upside break of the momentum strategy's band and a long on a downside break. The exit fills on the next bar with 20 bp slippage. The name cannot re-enter before the next daily decision.
+
+Setup: same configuration as C1f (USDT point in time, top-40, daily, relative, buffer 2, hedged).
+
+PnL columns are in units of initial equity.
+
+| Run | CAGR | Sharpe | MDD | Funding | Price | Cost | Stops | Mom exits |
+|---|---|---|---|---|---|---|---|---|
+| Timing | −1.9% | 0.11 | −78% | +3.37 | −2.46 | −1.02 | 0 | 0 |
+| Timing + US exit | −13.3% | −0.27 | −81% | +2.13 | −0.50 | −2.19 | 0 | 3,746 |
+| Timing + UTC exit | −55.4% | −2.79 | −99% | +0.16 | −0.16 | −0.99 | 0 | 13,190 |
+| Timing + limits (C1f) | +4.0% | 0.28 | −60% | +2.49 | −1.19 | −1.04 | 308 | 0 |
+| Limits + US exit | −4.6% | −0.10 | −66% | +1.57 | −0.14 | −1.67 | 103 | 3,625 |
+| Limits + UTC exit | −41.4% | −2.38 | −96% | +0.16 | −0.18 | −0.93 | 4 | 12,640 |
+
+Yearly return:
+
+| Run | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|
+| Timing + US exit | +60% | +13% | −13% | −8% | −50% | −40% |
+| Limits + US exit | +75% | −3% | −4% | −5% | −22% | −37% |
+
+Reading:
+- **The exit does stop the squeezes.** With the US-session exit, price loss falls from −2.46 to −0.50, and to −0.14 with limits on.
+- **But it gives back more than it saves.**
+  - The book is out of the position more often, so funding falls by 0.9 to 1.2.
+  - Cost roughly doubles: each exit is a round trip with 20 bp slippage, and the name comes back at the next daily decision.
+- **The UTC-day band fires too often to use.** About 13k exits leave the book flat most of the time, so it collects almost no funding while costs grind it toward ruin.
+- **Rejected.** No variant beats C1f, and 2024–2026 stays negative in all of them. Re-entry timing or exit slippage could be tuned, but that would be fitting on top of a carry edge that is already gone after 2023.
+- **Variant count: 18 configurations.**
+
 (Re-run 2026-11-20 after the code review fixes: hedge instruments are no longer basket names,
 outages are held instead of closed, post-cost sizing. Flat decisions in the relative runs are
 mostly early 2024, when only 4 non-BTC USDC perps existed and k = 5 left the long side empty.)
