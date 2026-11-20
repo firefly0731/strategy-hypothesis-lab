@@ -61,7 +61,12 @@ class RiskConfig:
 
 
 def run_managed(data: MarketData, cfg: StrategyConfig, risk: RiskConfig, use: str = "hedged",
-                initial_equity: float = 1.0) -> BacktestResult:
+                initial_equity: float = 1.0, exit_up: np.ndarray | None = None,
+                exit_down: np.ndarray | None = None) -> BacktestResult:
+    """exit_up / exit_down: optional (bars × symbols) booleans, True where an upside / downside
+    breakout became known by that bar's close (momentum_exit.to_bar_grid). A short basket name
+    with exit_up, or a long one with exit_down, is closed on the next bar (stop slippage) and may
+    not re-enter before the next decision. Hedge legs are exempt."""
     idx, syms = data.close.index, data.symbols
     N, S = len(idx), len(syms)
     C = data.close.to_numpy(dtype=float)
@@ -99,7 +104,11 @@ def run_managed(data: MarketData, cfg: StrategyConfig, risk: RiskConfig, use: st
     inc_orders, full_orders, risk_orders = {}, {}, {}
     schedule, prev_tg, first_exec = [], None, None
     cols = ("equity", "price_pnl", "hedge_price_pnl", "funding_pnl", "cost", "turnover", "gross", "net",
-            "untraded", "stops", "recaps", "flatten", "scale", "paused")
+            "untraded", "stops", "recaps", "flatten", "scale", "paused", "mom_exits")
+    dec_bars = np.array(sorted(plan))
+    for name, arr in (("exit_up", exit_up), ("exit_down", exit_down)):
+        if arr is not None and arr.shape != (N, S):
+            raise ValueError(f"{name} must have shape (bars, symbols)")
     rec = np.zeros((N, len(cols)))
     held = np.zeros((N, S))
     ruined = False
@@ -108,7 +117,7 @@ def run_managed(data: MarketData, cfg: StrategyConfig, risk: RiskConfig, use: st
 
     for j in range(N):
         pp = hp = pf = cst = to = unt = 0.0
-        ev_stop = ev_recap = ev_flat = 0
+        ev_stop = ev_recap = ev_flat = ev_mom = 0
         ok = fin[j]
         if j > 0 and not ruined:
             p = C[j]
@@ -202,6 +211,22 @@ def run_managed(data: MarketData, cfg: StrategyConfig, risk: RiskConfig, use: st
                         risk_orders.setdefault(j + 1, []).append((stop_ids, 0.0, stop_rate))
                         cool_until[stop_ids] = t_ns[j] + td(risk.cooldown).value
                         ev_stop = len(stop_ids)
+                if exit_up is not None or exit_down is not None:
+                    against = np.zeros(S, dtype=bool)
+                    if exit_up is not None:
+                        against |= (n < 0) & exit_up[j]
+                    if exit_down is not None:
+                        against |= (n > 0) & exit_down[j]
+                    against &= ~hedge
+                    against[stop_ids] = False
+                    mom_ids = np.flatnonzero(against)
+                    if len(mom_ids):
+                        risk_orders.setdefault(j + 1, []).append((mom_ids, 0.0, stop_rate))
+                        nxt = dec_bars[dec_bars > j]
+                        until = t_ns[nxt[0]] if len(nxt) else np.iinfo(np.int64).max
+                        cool_until[mom_ids] = np.maximum(cool_until[mom_ids], until)
+                        stop_ids = np.concatenate([stop_ids, mom_ids])
+                        ev_mom = len(mom_ids)
                 if risk.recap_mult is not None:
                     big = np.abs(w) > risk.recap_mult * cfg.max_weight
                     big[stop_ids] = False
@@ -226,7 +251,7 @@ def run_managed(data: MarketData, cfg: StrategyConfig, risk: RiskConfig, use: st
             full_orders[j_full] = w
 
         rec[j] = (E, pp, hp, pf, cst, to, np.abs(n).sum() / E if E > 0 else 0.0,
-                  n.sum() / E if E > 0 else 0.0, unt, ev_stop, ev_recap, ev_flat, scale, float(paused))
+                  n.sum() / E if E > 0 else 0.0, unt, ev_stop, ev_recap, ev_flat, scale, float(paused), ev_mom)
         held[j] = n / E if E > 0 else 0.0
 
     bars = pd.DataFrame(rec, index=idx, columns=cols)
@@ -234,6 +259,6 @@ def run_managed(data: MarketData, cfg: StrategyConfig, risk: RiskConfig, use: st
     weights = pd.DataFrame(held, index=idx, columns=syms)
     res = summarize_run(data, cfg, bars, weights, schedule, first_exec)
     res.metrics.update(n_stops=int(bars["stops"].sum()), n_recaps=int(bars["recaps"].sum()),
-                       n_flatten=int(bars["flatten"].sum()),
+                       n_flatten=int(bars["flatten"].sum()), n_mom_exits=int(bars["mom_exits"].sum()),
                        share_reduced=float((bars["scale"] < 1).mean()), share_paused=float(bars["paused"].mean()))
     return res
