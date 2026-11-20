@@ -15,7 +15,7 @@ This document fixes the formulas before any code is written. Every number in the
 - **Grid.** A kline with `open_time` T becomes a bar with close time T + 1h on a regular UTC hourly grid. Every price used for a bar is that bar's close.
 - **Funding timing.** A settlement at time s belongs to the bar (t_{j−1}, t_j], which is the first bar close ≥ s. Two settlements in one bar are summed. Funding is paid on the position held during that bar, meaning the position after the trades at t_{j−1}. Trades at t_j happen after the settlement at t_j.
 - **Funding price.** The funding notional uses the perp close of bar t_j, not the mark price, which the archive does not have. On BTC/ETH the 1h close and the mark at the settlement minute differ by a few bp. The effect on funding PnL is second order (rate × gap).
-- **Multiplier contracts.** `1000PEPEUSDT`, `1000000MOGUSDT`, `1MBABYDOGEUSDT` and similar pair with spot `PEPEUSDT`, and so on. Perp prices are divided by the multiplier k (1e3, 1e4, 1e5, 1e6, or "1M" = 1e6), so both legs are quoted per coin.
+- **Multiplier contracts.** A perp whose exact symbol is also a spot pair uses that pair with k = 1, for example `1000SATSUSDT` and `1MBABYDOGEUSDT`. Otherwise `1000PEPEUSDT`, `1000000MOGUSDT` and similar pair with spot `PEPEUSDT`, and so on. Perp and mark prices are divided by the multiplier k (1e3, 1e4, 1e5, 1e6, or "1M" = 1e6), so both legs are quoted per coin.
 
 ## 2. One sleeve
 
@@ -74,6 +74,8 @@ e' = e − c_s·|0.75e' − a| − c_p·|0.75e' − b|
 1. **Liquidation check, using the intrabar mark-price high H_t.** Binance liquidates on the mark price, not the last price.
    - Source: `.../futures/um/monthly/markPriceKlines/{SYM}/1h/`.
    - Where the mark kline is missing (before 2020-01, or an hour absent from the archive), the proxy is spot high × (perp close / spot close) for that bar. The report counts these bars.
+   - If spot is also missing, H_t = max(F_t, F_{t−1}) when the perp close exists. This is counted as `n_high_fallback`.
+   - After an outage M can already be below maintenance. The formula would then give P_liq < F_{t−1}, so P_liq is clamped to F_{t−1}, and whatever M is left is forfeited. A liquidation therefore never books a gain.
    - Last-price wicks are reported but not used. ETHUSDT on 2020-03-13 traded at 323 with mark 119; BTCUSDT on 2021-07-26 traded at 48,169 with spot 38,300.
    - The first build used the last-price high. It liquidated both legs on those two wicks, and the 2020 and 2021 returns fell to +3% and +18%. The worst futures equity in the bar is M_{t−1} − qp(H_t − F_{t−1}). If that is ≤ mmr·qp·H_t, the short is liquidated:
    - Liquidation price: P_liq = (M_{t−1} + qp·F_{t−1}) / (qp(1 + mmr)).
@@ -106,7 +108,9 @@ Other assertions at every bar:
 
 - **Outages.** If either price of a held name is missing in a bar, the sleeve is held. Its legs are marked at the last valid price, so the PnL arrives when trading resumes. No band trade happens in that bar.
 - **Liquidation check during an outage.** It is skipped when the high is missing.
-- **Delistings.** If a leg has no price data after bar t (its last valid bar), the sleeve is closed at t at the last prices, with full costs.
+- **Delistings.** If a leg has no price data after bar t (its last valid bar), the sleeve is closed at t at the last prices, with full costs. The other leg may be stale at t; that case is counted as `n_stale_exits`.
+- **Stale exits.** A name the strategy wants to drop while one of its legs is stale is kept pending. Its exit is retried at every bar until both prices are present.
+- **Entry cap.** New entries are capped at slots − (names held), so a stuck exit never pushes the book above `slots` names.
 - **Entry requirement.** Both raw prices must be present at the decision bar.
 
 ## 4. Strategies
@@ -127,12 +131,13 @@ Other assertions at every bar:
 - **Decision.** Every day at 00:00 UTC, right after the 00:00 settlement.
 - **Signal.** Sum of funding rates settled in (t − 24h, t]. This is daily carry, so 4h and 8h interval names are comparable.
 - **Selection.** The top 10 by signal, ties broken by symbol name. Names that leave the top 10 are exited. New names are entered at min(E/10, cash / n_new) each. Names that stay keep their sleeve, with band rebalance only.
-- **Start.** Decisions begin when the first names pass the 30-day history rule after the 2020-01 archive start.
+- **Start.** The grid starts on 2019-09-01, when Binance USDT perps begin, so a name's history counts from its real listing date. Months before the 2020-01 archive come from REST, and delisted symbols that REST no longer knows are treated as absent. Decisions run from 2019-11-27, and metrics are measured from that date.
+- **Engine feedback.** The selector receives the engine's real holdings at every decision, so the rank buffer and the entry threshold apply to the true book.
 
 ### C. Greedy, improved (pre-committed, one run)
 
 The rules below are fixed before any result is seen:
-- **Universe.** Each name needs at least 365 days of history on both legs. Of those, only the top 40 by 30-day median perp quote volume are eligible, and that median must be at least $1M per hour. Spot must have at least $100k per hour.
+- **Universe.** Each name needs at least 365 days of history on both legs and raw prices at t. Of those, only the top 40 by 30-day median perp quote volume are eligible. That median must then be at least $1M per hour, and spot must have at least $100k per hour. The top 40 is taken before the volume rules, so a top-40 name that fails them is not replaced by #41.
 - **Signal.** Average daily carry over the trailing 3 days, i.e. the funding sum over (t − 3D, t] divided by 3.
 - **Cost threshold for a new entry.** The signal must be at least 0.0543% per day. At that rate, 7 days of funding on the 0.75 short covers one round trip: 0.75 × 7 × signal ≥ 0.285%.
 - **Rank buffer.** A held name stays while it ranks in the top 20 and its signal is > 0. Empty slots are filled with the best new names above the threshold.
@@ -146,6 +151,10 @@ Strategies A to C all run with the intrabar liquidation check (§2, step 1). The
 - the minimum futures equity relative to the notional.
 
 ## 5. Benchmarks and metrics
+
+**Years.** A bar that closes at 00:00 belongs to the previous day. Yearly windows group bars by (close − 1h).year.
+
+**Signal ties.** Signals are rounded to 1e-12 before ranking and before the threshold check, so float noise from the running sums never breaks an exact tie.
 
 **T-bills.** DTB3 is forward-filled to calendar days. The daily accrual is r/100/365 (treating the discount rate as a yield). The report shows the yearly average rate and the compounded return for the same window as the strategy.
 

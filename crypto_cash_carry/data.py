@@ -68,6 +68,8 @@ def _rest_perp_klines(symbol: str, month: str, cache: Path) -> pd.DataFrame | No
     while t0 <= t1:
         r = _session().get(f"{FAPI}/fapi/v1/klines", timeout=30,
                            params=dict(symbol=symbol, interval="1h", startTime=t0, endTime=t1, limit=1500))
+        if r.status_code == 400 and r.json().get("code") == -1121:     # invalid symbol: delisted contract
+            return None
         r.raise_for_status()
         batch = r.json()
         if not batch:
@@ -143,7 +145,8 @@ def build(perps: list[str], start: str, end: str, cache: Path = DEFAULT_CACHE, w
     m0, m1 = pd.Timestamp(start).strftime("%Y-%m"), pd.Timestamp(end).strftime("%Y-%m")
 
     def one(perp):
-        spot, k = perp_to_spot(perp)
+        # spot keeps the multiplier for some names (1000SATSUSDT, 1MBABYDOGEUSDT): exact match first
+        spot, k = (perp, 1.0) if spot_listed is not None and perp in spot_listed else perp_to_spot(perp)
         if spot_listed is not None and spot not in spot_listed:
             return perp, None
         kp = load_klines(perp, "um", m0, m1, cache)

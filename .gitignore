@@ -14,3 +14,5 @@ crypto_dirty_carry/data_cache/
 crypto_dirty_carry/results/
 crypto_cash_carry/reports/*.parquet
 crypto_cash_carry/reports/*.log
+crypto_cash_carry/reports/trades_*.csv
+crypto_cash_carry/reports/decisions_*.csv

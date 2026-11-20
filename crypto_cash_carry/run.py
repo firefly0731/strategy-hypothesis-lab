@@ -18,11 +18,12 @@ from crypto_dirty_carry.data import binance_archive_symbols, non_coin_symbols
 from .data import build, dtb3, perp_to_spot, spot_archive_symbols
 from .engine import Band, Costs, simulate
 from .metrics import VIDEO_YEARLY, decomposition, performance, tbill_yearly, yearly
-from .strategies import GreedyRule, fixed_targets, greedy_targets
+from .strategies import GreedyRule, GreedySelector, fixed_targets
 
 OUT = Path(__file__).resolve().parent / "reports"
 START, END = "2019-11-27", "2026-10-18"
 FIXED_ENTRY = "2019-11-28 00:00"
+GREEDY_GRID = "2019-09-01"       # USDⓈ-M USDT perps start 2019-09: history counts from the real listing
 UNMODELLED = """## Not modelled
 
 - **Exchange counterparty risk.** All capital sits on one venue. An insolvency, default or withdrawal freeze (for example FTX in November 2022) can wipe out the whole book, and no backtest shows that risk.
@@ -56,13 +57,17 @@ def run_fixed(costs, band):
 def greedy_universe():
     drop = non_coin_symbols()
     spot = set(spot_archive_symbols("USDT"))
-    perps = [p for p in binance_archive_symbols("USDT") if p not in drop and perp_to_spot(p)[0] in spot]
+    perps = [p for p in binance_archive_symbols("USDT") if p not in drop and (p in spot or perp_to_spot(p)[0] in spot)]
     return perps, spot
 
 
 def run_greedy(costs, band, rule, bundle):
-    tg, dlog = greedy_targets(bundle, rule)
-    r = simulate(bundle.market, tg, slots=rule.k, costs=costs, band=band, close_at_end=True)
+    sel = GreedySelector(bundle, rule, start=START)        # decisions from the spec start; grid starts earlier
+    r = simulate(bundle.market, sel, slots=rule.k, costs=costs, band=band, close_at_end=True)
+    keep = r.bars.index >= pd.Timestamp(START, tz="UTC")     # the first decision trades at START 00:00
+    assert (r.bars.loc[~keep, "equity"] == 1.0).all()       # nothing happens before the start
+    r.bars = r.bars.loc[keep]
+    dlog = pd.DataFrame(sel.log)
     return r, {"n_names_ever_held": int(r.by_symbol.shape[0]),
                "mean_names_held": float(r.bars["n_active"][r.bars["n_active"] > 0].mean())}, dlog
 
@@ -87,7 +92,7 @@ def main(argv=None):
     if {"greedy", "greedy_plus"} & set(which):
         perps, spot = greedy_universe()
         log(f"greedy universe: {len(perps)} USDT perps with a spot pair in the archive; loading")
-        bundle = build(perps, START, END, spot_listed=spot)
+        bundle = build(perps, GREEDY_GRID, END, spot_listed=spot)
         log(f"loaded {len(bundle.market.symbols)} names with both legs")
         if "greedy" in which:
             runs["greedy"] = run_greedy(costs, band, GreedyRule.spec(), bundle)

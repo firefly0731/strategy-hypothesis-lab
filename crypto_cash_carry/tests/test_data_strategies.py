@@ -105,3 +105,30 @@ def test_metrics_and_tbill_accrual():
     tb = tbill_yearly(rate, y)
     assert tb.loc[2024, "tbill_avg_pct"] == pytest.approx(5.0)
     assert tb.loc[2024, "tbill_return"] == pytest.approx((1 + 0.05 / 365) ** 366 - 1)
+
+
+def test_exact_ties_are_broken_by_symbol_despite_cumsum_noise():
+    rng = np.random.default_rng(2)
+    b = bundle([0.0003, 0.0003, 0.0003], n_days=400)
+    b.market.funding[: 24 * 300] += np.where(b.market.funding[: 24 * 300] != 0,
+                                             rng.normal(0, 1e-4, (24 * 300, 3)), 0.0)
+    tg, _ = greedy_targets(b, GreedyRule(k=1))
+    assert tg[max(tg)] == ["S0"]
+
+
+def test_top_n_is_taken_before_the_volume_rules():
+    b = bundle([0.003, 0.002, 0.001])
+    b.perp_qv[:, 0] = 1e9                              # most liquid perp ...
+    b.spot_qv[:, 0] = 10.0                             # ... but its spot is too thin
+    tg, _ = greedy_targets(b, GreedyRule(k=3, top_n_liquidity=1))
+    assert all(v == [] for v in tg.values())          # the top-1 slot is not handed to #2
+
+
+def test_yearly_windows_follow_the_day_convention():
+    idx = pd.date_range("2024-12-31 22:00", periods=4, freq="1h", tz="UTC")   # 23:00, 00:00, 01:00
+    eq = pd.Series([1.0, 1.0, 1.1, 1.1], index=idx)
+    bars = pd.DataFrame({"equity": eq, "funding": eq.diff().fillna(0.0), "spot_pnl": 0.0, "perp_pnl": 0.0,
+                         "fee": 0.0, "slippage": 0.0, "liq_loss": 0.0})
+    y = yearly(bars)
+    assert y.loc[2024, "return"] == pytest.approx(0.1)   # the bar closing at 2025-01-01 00:00 is 2024
+    assert y.loc[2025, "return"] == pytest.approx(0.0)

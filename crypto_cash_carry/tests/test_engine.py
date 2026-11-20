@@ -157,10 +157,38 @@ def test_delisted_leg_closes_sleeve_at_last_price():
 def test_entries_sized_at_equity_over_slots_and_cash_limited():
     m = mkt(np.full((3, 3), 100.0), symbols=("A", "B", "C"))
     r = simulate(m, {0: ["A"], 1: ["A", "B", "C"]}, slots=2, costs=C, band=B, close_at_end=False)
-    # bar 0: A gets 1/2; bar 1: B gets E/2 capped by cash; C gets what is left (cash-limited)
+    # bar 0: A gets 1/2; bar 1: only one slot is free, B gets min(E/2, cash) and C is not entered
     s = r.state_after[1]
-    assert set(s) == {"A", "B", "C"}
-    assert r.bars["cash"].iloc[1] == pytest.approx(0.0, abs=1e-12)
+    assert set(s) == {"A", "B"}
+    e_a = r.bars["equity"].iloc[0] - 0.5                       # A's sleeve after its entry costs
+    assert r.bars["cash"].iloc[1] == pytest.approx(0.5 - (0.5 + e_a) / 2, abs=1e-12)
+    assert r.bars["n_active"].max() <= 2
+
+
+def test_exit_blocked_by_stale_price_is_retried_and_slots_hold():
+    px = np.full((6, 4), 100.0)
+    px[2, 1] = np.nan                                   # B has no spot price at the decision bar
+    m = mkt(px, symbols=("A", "B", "C", "D"))
+    r = simulate(m, {0: ["A", "B"], 2: ["C", "D"]}, slots=2, costs=C, band=B, close_at_end=False)
+    assert r.bars["n_active"].max() <= 2
+    assert set(r.state_after[2]) == {"B", "C"}          # A out; B stuck; only one slot for C/D
+    assert set(r.state_after[3]) == {"C"}               # B leaves on the first fresh bar (3)
+    assert r.bars["n_exits"].iloc[3] == 1
+
+
+def test_missing_high_falls_back_to_close_for_liquidation():
+    m = mkt([100.0, 200.0], high=[100.0, np.nan])       # +100% close, no high
+    r = run(m)
+    assert r.bars["n_liq"].iloc[1] == 1 and r.stats["n_high_fallback"] == 1
+
+
+def test_liquidation_after_outage_never_books_a_gain():
+    # perp jumps during an outage of the high and the spot; M is far below maintenance afterwards
+    m = mkt([100.0, np.nan, 100.0], perp=[100.0, 150.0, 100.0], high=[100.0, np.nan, 150.0])
+    r = run(m, check_liq=True)
+    liq_rows = r.bars[r.bars["n_liq"] > 0]
+    assert len(liq_rows) == 1 and (liq_rows["perp_pnl"] <= 1e-15).all()
+
 
 
 def test_bad_inputs_raise():

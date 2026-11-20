@@ -92,11 +92,13 @@ def _solve_post_cost(e: float, a: float, b: float, costs: Costs, band: Band) -> 
     return x
 
 
-def simulate(m: Market, targets: dict[int, list], slots: int, costs: Costs = Costs(), band: Band = Band(),
+def simulate(m: Market, targets, slots: int, costs: Costs = Costs(), band: Band = Band(),
              initial: float = 1.0, close_at_end: bool = True, check_liq: bool = True,
              record_state: bool | None = None) -> SimResult:
-    """targets: {bar index: desired set of symbols}. Names leaving the set are exited, new names are
-    entered at min(E/slots, cash/n_new) each, names that stay keep their sleeve (band only)."""
+    """targets: {bar index: desired symbols}, or a callable (t, held symbols) -> desired symbols | None
+    (None = no decision at t; the callable sees what the engine really holds).
+    Names leaving the set are exited (retried on every later bar while a leg is stale); new names are
+    entered at min(E/slots, cash/n_new) each, at most slots − held; names that stay keep their sleeve."""
     N, S = m.spot.shape
     col = {s: i for i, s in enumerate(m.symbols)}
     if record_state is None:
@@ -117,6 +119,9 @@ def simulate(m: Market, targets: dict[int, list], slots: int, costs: Costs = Cos
     states = [] if record_state else None
     E_prev = cash
     min_ratio = (np.inf, None, None)            # worst intrabar M / (qp·H) on the mark high
+    pending: set[int] = set()                   # names that should have left but had a stale leg
+    n_stale_exits = 0                           # delisting exits where the other leg was stale
+    n_high_fallback = 0                         # liquidation checks on max(close, prev close)
 
     def mark(j, s):
         return s["qs"] * s["S"] + s["M"]
@@ -139,22 +144,26 @@ def simulate(m: Market, targets: dict[int, list], slots: int, costs: Costs = Cos
         sp, pp, hp, fr = m.spot[t], m.perp[t], m.liq_high[t], m.funding[t]
         for j, s in list(sl.items()):
             # 1. intrabar liquidation on the mark-price high
-            if check_liq and s["qp"] > 0 and np.isfinite(hp[j]):
-                worst = s["M"] - s["qp"] * (hp[j] - s["F"])
-                ratio = worst / (s["qp"] * hp[j])
+            h = hp[j]
+            if not np.isfinite(h) and np.isfinite(pp[j]):         # no high: the close is the best we know
+                h = max(pp[j], s["F"])
+                n_high_fallback += 1
+            if check_liq and s["qp"] > 0 and np.isfinite(h):
+                worst = s["M"] - s["qp"] * (h - s["F"])
+                ratio = worst / (s["qp"] * h)
                 if ratio < min_ratio[0]:
                     min_ratio = (ratio, m.index[t], m.symbols[j])
-                if worst <= m.mmr[j] * s["qp"] * hp[j]:
-                    p_liq = (s["M"] + s["qp"] * s["F"]) / (s["qp"] * (1 + m.mmr[j]))
+                if worst <= m.mmr[j] * s["qp"] * h:
+                    # P_liq solves M − qp(P − F) = mmr·qp·P; if M was already below maintenance
+                    # (after an outage) it would lie below F: close at F and forfeit what is left
+                    p_liq = max((s["M"] + s["qp"] * s["F"]) / (s["qp"] * (1 + m.mmr[j])), s["F"])
                     pnl = -s["qp"] * (p_liq - s["F"])
-                    loss = m.mmr[j] * s["qp"] * p_liq
+                    loss = s["M"] + pnl              # = mmr·qp·P_liq in the normal case
                     out["perp_pnl"] += pnl
                     out["liq_loss"] += loss
                     out["n_liq"] += 1
                     per_sym[j, 1] += pnl
                     per_sym[j, 4] += loss
-                    s["M"] += pnl - loss
-                    assert abs(s["M"]) <= 1e-12 * max(1.0, s["qp"] * p_liq), s["M"]
                     s["M"] = 0.0
                     trades.append((m.index[t], m.symbols[j], "liquidation", 0.0, s["qp"] * p_liq, 0.0, 0.0))
                     s["qp"] = 0.0
@@ -179,15 +188,24 @@ def simulate(m: Market, targets: dict[int, list], slots: int, costs: Costs = Cos
                 s["M"] += f
 
         # 4. trades at the close
-        want = targets.get(t)
+        if callable(targets):
+            want = targets(t, [m.symbols[j] for j in sl])
+        else:
+            want = targets.get(t)
+        if want is not None:
+            pending |= {j for j in sl if m.symbols[j] not in want}
+            pending -= {col[x] for x in want if x in col}
         for j, s in list(sl.items()):
             delisted = min(last_spot[j], last_perp[j]) < N - 1 and t >= min(last_spot[j], last_perp[j])
             fresh = np.isfinite(sp[j]) and np.isfinite(pp[j])
-            leave = want is not None and m.symbols[j] not in want and fresh   # no trades at stale prices
+            leave = j in pending and fresh                           # no trades at stale prices
             if close_at_end and t == N - 1 or delisted or leave:
+                if not fresh:
+                    n_stale_exits += 1
                 trade(t, j, s, 0.0, 0.0, "exit", out)
                 cash += s["qs"] * s["S"] * (1 - costs.c_s) + s["M"] - costs.c_p * s["qp"] * s["F"]
                 del sl[j]
+                pending.discard(j)
                 out["n_exits"] += 1
         for j, s in sl.items():
             if not (np.isfinite(sp[j]) and np.isfinite(pp[j])):
@@ -206,6 +224,7 @@ def simulate(m: Market, targets: dict[int, list], slots: int, costs: Costs = Cos
             new = [col[x] for x in want if x in col and col[x] not in sl
                    and np.isfinite(sp[col[x]]) and np.isfinite(pp[col[x]])
                    and (t < min(last_spot[col[x]], last_perp[col[x]]) or min(last_spot[col[x]], last_perp[col[x]]) == N - 1)]
+            new = new[:max(0, slots - len(sl))]
             if new:
                 E_now = cash + sum(mark(j, s) for j, s in sl.items())
                 per = min(E_now / slots, cash / len(new))
@@ -236,5 +255,6 @@ def simulate(m: Market, targets: dict[int, list], slots: int, costs: Costs = Cos
     tr = pd.DataFrame(trades, columns=["time", "symbol", "kind", "spot_notional", "perp_notional", "fee", "slippage"])
     by = pd.DataFrame(per_sym, index=m.symbols, columns=["funding", "basis", "fee", "slippage", "liq_loss"])
     by = by[(by != 0).any(axis=1)]
-    stats = {"min_margin_ratio": min_ratio[0], "min_margin_time": min_ratio[1], "min_margin_symbol": min_ratio[2]}
+    stats = {"min_margin_ratio": min_ratio[0], "min_margin_time": min_ratio[1], "min_margin_symbol": min_ratio[2],
+             "n_stale_exits": n_stale_exits, "n_high_fallback": n_high_fallback}
     return SimResult(bars=bars, trades=tr, by_symbol=by, state_after=states, stats=stats)

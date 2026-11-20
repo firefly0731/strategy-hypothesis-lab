@@ -40,7 +40,8 @@ def yearly(bars: pd.DataFrame, initial: float = 1.0) -> pd.DataFrame:
     eq = bars["equity"]
     prev = pd.concat([pd.Series([initial], index=[eq.index[0] - pd.Timedelta(hours=1)]), eq])
     out = []
-    for y, g in eq.groupby(eq.index.year):
+    # a bar closing at 00:00 ends the previous day (DESIGN.md §4.A), so group by close − 1h
+    for y, g in eq.groupby((eq.index - pd.Timedelta(hours=1)).year):
         start = prev[prev.index < g.index[0]].iloc[-1]
         b = bars.loc[g.index]
         out.append({"year": y, "return": g.iloc[-1] / start - 1,
