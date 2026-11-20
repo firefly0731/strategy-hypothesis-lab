@@ -9,6 +9,7 @@ known at T+1min. Everything downstream relies on this convention.
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -62,11 +63,38 @@ def _day_klines(symbol: str, day: str, cache: Path) -> pd.DataFrame | None:
         return pd.read_parquet(path)
     df = _fetch_zip_csv(f"{DAILY}/klines/{symbol}/1m/{symbol}-1m-{day}.zip")
     if df is None:
-        return None
+        df = _manual_klines(symbol, day)          # user-supplied file (archive not published yet)
+        if df is None:
+            return None
     out = _clean_klines(df)
     path.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(path, index=False)
     return out
+
+
+MANUAL_DIRS = [Path(__file__).resolve().parent.parent / "data_inbox", DEFAULT_CACHE / "manual"]
+
+
+def _manual_klines(symbol: str, day: str) -> pd.DataFrame | None:
+    """Look for <symbol>-1m-<YYYY-MM-DD>.json (raw /fapi/v1/klines response) or .csv/.zip
+    (data.binance.vision format) in data_inbox/ or data_cache/manual/."""
+    for d in MANUAL_DIRS:
+        js = d / f"{symbol}-1m-{day}.json"
+        if js.exists():
+            rows = json.loads(js.read_text())
+            df = pd.DataFrame(rows, columns=KLINE_COLS[: len(rows[0])])
+            return df.drop_duplicates("open_time").sort_values("open_time")
+        for ext in (".csv", ".zip"):
+            f = d / f"{symbol}-1m-{day}{ext}"
+            if f.exists():
+                if ext == ".zip":
+                    with zipfile.ZipFile(f) as z:
+                        raw = z.read(z.namelist()[0])
+                else:
+                    raw = f.read_bytes()
+                first = raw.split(b"\n", 1)[0]
+                return pd.read_csv(io.BytesIO(raw), header=0 if not first[:1].isdigit() else None)
+    return None
 
 
 def _month_klines(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
