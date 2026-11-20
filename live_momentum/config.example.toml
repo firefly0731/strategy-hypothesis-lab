@@ -1,0 +1,19 @@
+# live_momentum configuration. Copy to /etc/live_momentum/config.toml (not into the repo).
+# API keys are NOT configured here: use BINANCE_API_KEY / BINANCE_API_SECRET in the
+# environment or a separate file with permissions 600 (secrets_file).
+
+mode = "replay"          # replay | paper | testnet | live
+dry_run = true           # must stay true for replay/paper
+capital_fraction = 0.0   # share of the target capital (Phase 3 starts small)
+history_start = "2021-01"
+data_dir = "/var/lib/live_momentum/data"
+state_dir = "/var/lib/live_momentum/state"
+log_dir = "/var/log/live_momentum"
+# secrets_file = "/etc/live_momentum/secrets.env"
+
+[risk]
+daily_max_loss_pct = 0.02        # stop new entries and flatten when today's loss exceeds this
+max_notional_per_symbol = 0.0    # USDT, required for testnet/live
+max_gross_leverage = 1.0         # Phase 3 starts at <= 1x
+stale_data_sec = 10.0            # no new orders when market data is older than this
+kill_switch_file = "/var/lib/live_momentum/KILL"

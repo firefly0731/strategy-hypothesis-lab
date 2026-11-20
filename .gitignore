@@ -10,3 +10,7 @@ crypto_grid/results/
 research/mm/sources/
 crypto_mm/data_cache/
 crypto_mm/results/
+.venv/
+live_momentum/runtime/
+*.secrets
+secrets.env
