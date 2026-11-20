@@ -196,11 +196,16 @@ def compute_targets(snap: Snapshot, cfg: StrategyConfig, prev: "Targets | None" 
     H = _bars(cfg.min_history, bar)
     hist_ok = snap.close.iloc[-H:].notna().sum() >= math.ceil(cfg.min_obs_frac * H)
     price_ok = snap.close.iloc[-1].notna()
-    if snap.quote_volume is not None and cfg.min_median_quote_volume > 0:
+    liq_ok = pd.Series(True, index=syms)
+    if snap.quote_volume is not None and (cfg.min_median_quote_volume > 0 or cfg.liquidity_top_n):
         L = _bars(cfg.liquidity_window, bar)
-        liq_ok = snap.quote_volume.iloc[-L:].median() >= cfg.min_median_quote_volume
-    else:
-        liq_ok = pd.Series(True, index=syms)
+        med = snap.quote_volume.iloc[-L:].median().where(price_ok & hist_ok)
+        liq_ok = med >= cfg.min_median_quote_volume
+        if cfg.liquidity_top_n:
+            # hedge instruments are ranked too but never take a basket slot
+            ranked = med[liq_ok & ~syms.isin(list(cfg.hedge_instruments))].sort_values(ascending=False)
+            top = set(ranked.index[: cfg.liquidity_top_n]) | set(cfg.hedge_instruments)
+            liq_ok = liq_ok & syms.isin(list(top))
     V = _bars(cfg.vol_window, bar)
     vmin = math.ceil(cfg.min_obs_frac * V)
     base_ok = price_ok & hist_ok & liq_ok

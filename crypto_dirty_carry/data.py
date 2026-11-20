@@ -190,6 +190,49 @@ def binance_universe(quote: str = "USDC", cache: Path = DEFAULT_CACHE, refresh: 
     return df.drop(columns="onboard_ms").sort_values("onboard").reset_index(drop=True)
 
 
+ARCHIVE_S3 = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
+INDEX_CONTRACTS = {"DEFIUSDT", "BTCDOMUSDT", "FOOTBALLUSDT", "BLUEBIRDUSDT", "ALLUSDT"}
+
+
+def binance_archive_symbols(quote: str = "USDT", cache: Path = DEFAULT_CACHE, refresh: bool = False) -> list[str]:
+    """Every USDⓈ-M symbol that ever had a monthly kline archive, delisted ones included.
+    Delivery contracts (names with '_') are dropped. This is the point-in-time universe source:
+    which of these traded at a given time is decided by their price data, not by today's listing."""
+    import re
+
+    path = cache / "archive_symbols_um.json"
+    if path.exists() and not refresh:
+        syms = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        syms, marker, prefix = [], "", "data/futures/um/monthly/klines/"
+        while True:
+            r = requests.get(ARCHIVE_S3, params={"delimiter": "/", "prefix": prefix, "marker": marker}, timeout=60)
+            r.raise_for_status()
+            page = re.findall(rf"<Prefix>{prefix}([^<]+)/</Prefix>", r.text)
+            syms += page
+            if "<IsTruncated>true" not in r.text or not page:
+                break
+            marker = prefix + page[-1] + "/"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(syms), encoding="utf-8")
+    return sorted(s for s in syms if s.endswith(quote) and "_" not in s)
+
+
+def non_coin_symbols(cache: Path = DEFAULT_CACHE, refresh: bool = False) -> set[str]:
+    """Symbols that are not single-coin perpetuals: TradFi (equities, commodities, FX), indices and
+    pre-market contracts from today's exchangeInfo, plus known delisted index contracts."""
+    path = cache / "non_coin_symbols.json"
+    if path.exists() and not refresh:
+        return set(json.loads(path.read_text(encoding="utf-8")))
+    r = requests.get(f"{FAPI}/fapi/v1/exchangeInfo", timeout=30)
+    r.raise_for_status()
+    out = {s["symbol"] for s in r.json()["symbols"]
+           if s.get("underlyingType") != "COIN" or s.get("contractType") != "PERPETUAL"} | INDEX_CONTRACTS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(out)), encoding="utf-8")
+    return out
+
+
 def _fetch(url: str, tries: int = 4):
     """data.binance.vision zip → DataFrame (None on 404), retrying dropped connections."""
     import time
@@ -256,27 +299,34 @@ def _funding_rest(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.Dat
                          "rate": df["fundingRate"].astype(float)})
 
 
-def _funding(symbol: str, start: str, end: str, cache: Path) -> pd.DataFrame:
-    """Monthly archive (data.binance.vision); months not yet archived come from the REST API."""
+def _funding(symbol: str, start: str, end: str, cache: Path,
+             traded_until: pd.Timestamp | None = None) -> pd.DataFrame:
+    """Monthly archive (data.binance.vision); months not yet archived come from the REST API,
+    but only while the symbol still has price data (no REST calls for delisted contracts)."""
     from crypto_intraday_momentum.data import load_funding
 
     arch = load_funding(symbol, start, end, cache=cache)
     last = pd.Period(end, freq="M").end_time.tz_localize("UTC")
+    if traded_until is not None:
+        last = min(last, traded_until)
     first = pd.Period(start, freq="M").start_time.tz_localize("UTC")
     tail_from = (pd.Timestamp(arch["time"].max()) + pd.Timedelta(minutes=1)) if len(arch) else first
-    if tail_from < min(last, pd.Timestamp.now(tz="UTC")):
+    if tail_from < min(last, pd.Timestamp.now(tz="UTC")) - pd.Timedelta(hours=8):
         arch = pd.concat([arch, _funding_rest(symbol, tail_from, last)], ignore_index=True)
     return arch.drop_duplicates("time").sort_values("time").reset_index(drop=True)
 
 
 def from_binance(symbols: Iterable[str], start: str, end: str, bar: str = "1h",
                  factor_map: Mapping[str, str] | None = None, cache: Path = DEFAULT_CACHE,
-                 workers: int = 8) -> MarketData:
+                 workers: int = 8, funding_min_qv: float | None = None) -> MarketData:
     """Build MarketData from Binance USDⓈ-M archives.
 
     `bar` must be a kline interval Binance publishes ("1h", "4h", "8h", "1d", ...).
     Kline open_time T is converted to the bar close time T + bar. `factor_map` maps a factor name to
     the traded symbol whose bar return is the factor (default {"BTC": first BTC symbol}).
+    funding_min_qv: download optimisation for large universes. Funding is skipped for symbols whose
+    30-day median bar quote volume never reaches this value. Those names can never pass a liquidity
+    filter at the same threshold, so results are unchanged; they simply get no carry signal.
     """
     symbols = list(symbols)
     step = pd.Timedelta(bar)
@@ -287,7 +337,12 @@ def from_binance(symbols: Iterable[str], start: str, end: str, bar: str = "1h",
             return sym, None, None
         k = k.drop_duplicates("open_time").sort_values("open_time")
         idx = pd.DatetimeIndex(k["open_time"]) + step
-        f = _funding(sym, start, end, cache)
+        if funding_min_qv is not None:
+            med = pd.Series(k["quote_volume"].to_numpy(), index=idx).rolling("30D").median()
+            if not (med >= funding_min_qv).any():
+                return sym, pd.DataFrame({"close": k["close"].to_numpy(), "qv": k["quote_volume"].to_numpy()},
+                                         index=idx), None
+        f = _funding(sym, start, end, cache, traded_until=idx[-1])
         return sym, pd.DataFrame({"close": k["close"].to_numpy(), "qv": k["quote_volume"].to_numpy()},
                                  index=idx), f
 

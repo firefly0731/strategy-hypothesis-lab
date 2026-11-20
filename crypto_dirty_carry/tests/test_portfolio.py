@@ -151,6 +151,32 @@ def test_hedge_instrument_is_never_a_basket_name(data):
         assert tg.w.abs().max() <= cfg.max_weight + 1e-12
 
 
+def _with_qv(data, qv):
+    return type(data)(close=data.close, funding=data.funding, factors=data.factors, quote_volume=qv)
+
+
+def test_liquidity_top_n_drops_least_liquid(data):
+    qv = data.quote_volume.copy()
+    qv["A"] = 1.0                                                # least liquid basket candidate
+    qv["B"] = 10.0
+    cfg = StrategyConfig(k=3, max_weight=0.3, hedge_instruments=(BTC,), liquidity_top_n=4)
+    tg = targets(_with_qv(data, qv), cfg)
+    assert set(tg.short) == {"C"} and set(tg.long) == {"D", "E", "F"}
+
+
+def test_liquidity_uses_trailing_30d_median_only(data):
+    t = data.close.index[-1]
+    cfg = StrategyConfig(k=3, max_weight=0.3, hedge_instruments=(BTC,), min_median_quote_volume=100.0)
+    qv = data.quote_volume.copy()
+    qv.loc[qv.index > t - pd.Timedelta(days=10), "D"] = 1.0      # illiquid for 10 of 30 days
+    assert "D" in targets(_with_qv(data, qv), cfg).long          # 30D median still high
+    qv.loc[qv.index > t - pd.Timedelta(days=20), "D"] = 1.0      # illiquid for 20 of 30 days
+    assert "D" not in targets(_with_qv(data, qv), cfg).long
+    qv = data.quote_volume.copy()
+    qv.loc[qv.index < t - pd.Timedelta(days=31), "D"] = 1.0      # illiquid only before the window
+    assert "D" in targets(_with_qv(data, qv), cfg).long
+
+
 def test_ridge_and_shrinkage_pull_betas():
     from crypto_dirty_carry.factors import estimate_betas
     rng = np.random.default_rng(2)

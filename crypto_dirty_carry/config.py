@@ -63,6 +63,7 @@ class StrategyConfig:
     min_history: str = "30D"          # the name must have prices over this span
     liquidity_window: str = "30D"
     min_median_quote_volume: float = 0.0   # per bar, quote currency
+    liquidity_top_n: int | None = None     # keep only the n most liquid names (same median) at each decision
     min_obs_frac: float = 0.8         # share of finite observations required in every window
 
     # --- volatility -----------------------------------------------------------------------
