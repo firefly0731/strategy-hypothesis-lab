@@ -143,6 +143,62 @@ Reading:
 
 Variant count: 11 configurations.
 
+### C1f: settlement-aware execution and loss limits on the C1e universe (fixed before the run)
+
+Both runs use the rules of C1c-B and the universe of C1e, executed by `risk.run_managed`. The timing is the same in both:
+- **22:00 UTC:** decide.
+- **23:00:** execute increases and entries, so every position is held over the 00:00 settlement.
+- **00:00:** execute reductions and exits, after the settlement has been paid.
+
+Run "full" adds loss limits on top of the timing:
+- **Per-name stop:** triggers when PnL since entry (price + funding) reaches −2% of equity at entry. The exit carries 20 bp extra slippage and the name is barred for 7 days.
+- **Weight re-cap:** a weight above 1.5× the cap is cut back to the cap.
+- **Drawdown rules:** a 15% drawdown halves new targets; a 25% drawdown flattens the book and pauses for 7 days, after which the peak resets.
+
+All limits act on the bar after the one that triggers them.
+
+| Run | Book | CAGR | Sharpe (bar / daily) | t | MDD | Funding | Price | Cost | Turnover/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| C1e (no timing, no limits) | hedged | −4.8% | −0.00 / 0.02 | −0.0 | −79.8% | +3.11 | −2.36 | −1.00 | 68× |
+| Timing only | hedged | −1.9% | 0.09 / 0.12 | 0.2 | −77.7% | +3.37 | −2.46 | −1.02 | 69× |
+| | raw | +15.5% | 0.60 / 0.58 | 1.4 | −65.6% | +5.26 | −2.70 | −1.29 | 64× |
+| Timing + limits | hedged | +4.1% | 0.29 / 0.28 | 0.7 | −60.3% | +2.49 | −1.19 | −1.04 | 63× |
+| | raw | +2.8% | 0.24 / 0.24 | 0.6 | −60.1% | +2.56 | −1.39 | −1.00 | 59× |
+
+Yearly returns of the hedged book:
+
+| Run | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 YTD |
+|---|---|---|---|---|---|---|
+| C1e | +116% | +18% | +8% | +26% | −67% | −34% |
+| Timing only | +104% | +24% | +4% | +15% | −61% | −25% |
+| Timing + limits | +113% | +11% | +2% | −3% | −27% | −27% |
+
+Timing + limits, hedged, by sub-period:
+
+| Period | Sharpe | t | MDD |
+|---|---|---|---|
+| 2021–2023 | 1.34 | 2.3 | −24% |
+| 2022–2023 | 0.39 | 0.6 | −24% |
+| 2024–2026 | −0.84 | −1.4 | −49% |
+
+Limit activity (hedged):
+
+| | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|
+| Stops (308 total) | 88 | 67 | 36 | 19 | 54 | 44 |
+| Share of time at half size (35% overall) | 0% | 14% | 23% | 81% | 35% | 63% |
+
+- Weight re-caps fired 0 times: the stops always triggered first.
+- Flatten events occurred 4 times: 2024-03-09, 2025-06-11, 2026-04-09 and 2026-09-18.
+- The book was paused 1.3% of the time.
+
+Reading:
+- **Timing does what it should.** It adds +0.27 of funding at the same cost, but it does not touch the squeeze losses.
+- **The limits cut the 2025 loss from −67% to −27% and the MDD from −80% to −60%.** They also cost funding (+3.37 → +2.49), because the book is smaller and names sit out after stops.
+- **The 25% floor is a per-episode limit, not an absolute floor.** The peak resets after each pause, so four episodes compound to −60%. An absolute floor would need a peak that never resets, or a hard stop on equity versus initial capital.
+- **The strategy is still not profitable after 2023.** The 2024–2026 Sharpe is −0.84 with loss limits in place. Funding collected (+0.39 in that period) is smaller than price losses (−0.70), even with stops.
+- **Variant count: 13 configurations.**
+
 (Re-run 2026-11-20 after the code review fixes: hedge instruments are no longer basket names,
 outages are held instead of closed, post-cost sizing. Flat decisions in the relative runs are
 mostly early 2024, when only 4 non-BTC USDC perps existed and k = 5 left the long side empty.)
