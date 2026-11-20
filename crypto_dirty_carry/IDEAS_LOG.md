@@ -2,7 +2,7 @@
 
 | # | Source | Variants | Result | Decision |
 |---|--------|----------|--------|----------|
-| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 9 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0. Daily + rank buffer 2K: Sharpe 0.84 (t ≈ 1.4), in-sample after 9 trials | open (no adoption gate passed) |
+| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 9 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0. Daily + rank buffer 2K: Sharpe 0.84 (t ≈ 1.4), in-sample after 9 trials. Same rules on USDT-M 2021–2026: Sharpe 1.02 (t 2.4), 2021–2023 Sharpe 0.84 (t 1.4) but carried by 2021 and biased by a survivor universe | open (no adoption gate passed) |
 
 ## C1 runs: Binance USDC-M, 2024-01 .. 2026-10, 1h bars
 
@@ -67,6 +67,37 @@ Observations:
 - **Funding collected is stable** across all variants, at +0.37 to +0.48.
 - **Performance is not monotonic in turnover.** C has the lowest cost but a lower Sharpe than B. The differences come from price PnL, which swings between −0.20 and +0.24 across variants, more than the cost savings. So the ranking between variants is mostly noise in the price component, not a cost effect.
 - **B is the best so far:** Sharpe 0.84, t ≈ 1.4, MDD −21%. It was chosen after seeing 9 configurations on the same sample, so it must be treated as in-sample. A deflated-Sharpe correction over 9 trials and a hold-out (time split, or a USDT-M universe the rules were not tuned on) are required before reading anything into it.
+
+### C1d: variant B unchanged on USDT-M (2021-01 .. 2026-10)
+
+The rules are exactly those of C1c-B: relative carry, projection, daily rebalance, 3D carry, rank buffer 2K, k = 5. Venue-dependent inputs:
+- Universe: the USDT perps of the same 41 base assets as the USDC list.
+- Costs: USDT VIP0 taker 5 bp + 1 bp slippage. Hedge instrument: BTCUSDT.
+- Metrics start at the first trade, 2021-03-03. Sub-period PnL is relative to the equity at the start of each period.
+
+| Period | Book | CAGR | Sharpe (bar / daily) | t | MDD | Funding | Price | Cost | Turnover/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| 2021-03 .. 2023 (not seen when B was chosen) | hedged | +15.8% | 0.84 / 0.83 | 1.4 | −19.1% | +0.36 | +0.39 | −0.23 | 44× |
+| | raw | +22.3% | 1.03 / 1.02 | 1.7 | −23.6% | +0.50 | +0.50 | −0.24 | 38× |
+| 2024 .. 2026-10 (same coins and period as the USDC runs) | hedged | +26.5% | 1.19 / 1.15 | 2.0 | −36.2% | +0.77 | +0.56 | −0.38 | 65× |
+| | raw | +34.8% | 1.26 / 1.20 | 2.1 | −35.8% | +0.86 | +0.86 | −0.38 | 61× |
+| Full | hedged | +21.1% | 1.02 / 1.00 | 2.4 | −36.2% | +1.53 | +1.24 | −0.82 | 54× |
+| | raw | +28.4% | 1.15 / 1.11 | 2.7 | −36.7% | +2.02 | +2.01 | −0.91 | 50× |
+
+Yearly returns of the hedged book:
+
+| 2021 | 2022 | 2023 | 2024 | 2025 | 2026 YTD |
+|---|---|---|---|---|---|
+| +53.4% | +2.9% | −4.1% | +47.3% | +65.2% | −19.8% |
+
+Ex-post daily BTC β: hedged −0.001 (t −0.2), raw −0.067 (t −6.6).
+
+Observations:
+- **The unseen period is positive but rests on one year.** Most of 2021–2023 is 2021 (+53%, the high-funding bull market). 2022 and 2023 together are about flat, and t = 1.4 is not significant.
+- **USDT beats USDC on the same coins and period** (Sharpe 1.19 against 0.84). Two candidate reasons, neither tested: USDT funding is larger and more dispersed, and early 2024 had more eligible USDT names (USDC had only 4 non-BTC perps).
+- **Hedging lowers return.** The raw book does better than the hedged book in every sub-period. Its −0.07 BTC beta was not costly here. Neutralisation buys lower beta, not higher Sharpe.
+- **Strong universe look-ahead in 2021–2023.** The universe is coins that (a) still trade in 2026-11 and (b) later received a USDC perp, which is selection on future success. LUNA, FTT and other delisted names are absent. The "unseen" period therefore is not a clean hold-out. A point-in-time USDT universe built from the symbols traded each month, with a liquidity filter, is needed before this counts.
+- **Variant count: 10 configurations.**
 
 (Re-run 2026-11-20 after the code review fixes: hedge instruments are no longer basket names,
 outages are held instead of closed, post-cost sizing. Flat decisions in the relative runs are
