@@ -2,7 +2,7 @@
 
 | # | Source | Variants | Result | Decision |
 |---|--------|----------|--------|----------|
-| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 9 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0. Daily + rank buffer 2K: Sharpe 0.84 (t ≈ 1.4), in-sample after 9 trials. Same rules on USDT-M 2021–2026: Sharpe 1.02 (t 2.4), 2021–2023 Sharpe 0.84 (t 1.4) but carried by 2021 and biased by a survivor universe | open (no adoption gate passed) |
+| C1 | Own hypothesis (user specification, 2026-11-20): factor-neutral "dirty" funding carry. Short top-K trailing funding, long bottom-K, inverse vol, dollar neutral, BTC-beta neutral. Literature step (RESEARCH_PROTOCOL §1) still open | 9 configs × {raw, hedged} (below) | 8h rebalance: costs ≈ funding in every variant. Daily rebalance: relative carry Sharpe 0.61 (t ≈ 1.0), spec signs ≈ 0. Daily + rank buffer 2K: Sharpe 0.84 (t ≈ 1.4), in-sample after 9 trials. Same rules on USDT-M 2021–2026: Sharpe 1.02 (t 2.4), 2021–2023 Sharpe 0.84 (t 1.4) but carried by 2021 and biased by a survivor universe. **Point-in-time USDT universe (delisted + new listings, top-40 liquidity): Sharpe ≈ 0, MDD −80%, 2025 −67% from short squeezes (MYX −58%)** | rejected as specified (C1e); idea kept open for squeeze-risk controls |
 
 ## C1 runs: Binance USDC-M, 2024-01 .. 2026-10, 1h bars
 
@@ -98,6 +98,50 @@ Observations:
 - **Hedging lowers return.** The raw book does better than the hedged book in every sub-period. Its −0.07 BTC beta was not costly here. Neutralisation buys lower beta, not higher Sharpe.
 - **Strong universe look-ahead in 2021–2023.** The universe is coins that (a) still trade in 2026-11 and (b) later received a USDC perp, which is selection on future success. LUNA, FTT and other delisted names are absent. The "unseen" period therefore is not a clean hold-out. A point-in-time USDT universe built from the symbols traded each month, with a liquidity filter, is needed before this counts.
 - **Variant count: 10 configurations.**
+
+### C1e: variant B on a point-in-time USDT-M universe (fixed before the run)
+
+The rules are exactly C1c-B. Only the universe and eligibility change:
+- Universe: every USDT symbol with a monthly kline archive (923, delisted included) minus TradFi, index and pre-market contracts. 680 have data in 2021-01 .. 2026-10.
+- Extra eligibility at each decision: trailing 30-day median hourly quote volume ≥ $1M, and top 40 by that median.
+- Costs: 5 bp + 1 bp. Hedge instrument: BTCUSDT.
+
+| Period | Book | CAGR | Sharpe (bar / daily) | t | MDD | Funding | Price | Cost | Turnover/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| 2021-03 .. 2023 | hedged | +42.9% | 1.49 / 1.48 | 2.5 | −22.6% | +1.70 | +0.57 | −0.52 | 67× |
+| 2022 .. 2023 | hedged | +12.6% | 0.63 / 0.63 | 0.9 | −22.6% | +0.65 | −0.20 | −0.19 | 64× |
+| 2024 .. 2026-10 | hedged | −36.7% | −1.13 / −0.96 | −1.9 | −79.8% | +0.51 | −1.06 | −0.17 | 69× |
+| Full | hedged | −4.8% | −0.00 / 0.02 | −0.0 | −79.8% | +3.11 | −2.36 | −1.00 | 68× |
+| Full | raw | +9.2% | 0.43 / 0.43 | 1.0 | −70.3% | +4.43 | −2.70 | −1.09 | 62× |
+
+Yearly returns of the hedged book:
+
+| 2021 | 2022 | 2023 | 2024 | 2025 | 2026 YTD |
+|---|---|---|---|---|---|
+| +116.4% | +17.5% | +8.1% | +25.7% | −66.7% | −34.5% |
+
+Ex-post daily BTC β: hedged −0.028 (t −2.1), raw −0.066 (t −4.7).
+
+Sub-period PnL is relative to the equity at the start of each period.
+
+Diagnosis (decompose_pit, sums of per-bar contributions as a fraction of equity):
+- **2025:** price −1.15, funding +0.20, cost −0.09.
+  - MYXUSDT alone is −0.58. It was short in September 2025 during a multi-fold squeeze. Its weight drifted from the −0.25 cap to −0.39 within a day, because the daily rebalance cannot cut it.
+  - Next are ALCH (−0.13), LIGHT (−0.13), ENA, PNUT and BNX, all shorts in high-funding names.
+- **2026:** price −0.80, funding +0.54. The largest losses are AKE (−0.26) and PIPPIN (−0.15).
+- **Data artefacts: none found.** 7 positions were held across data gaps longer than a day. All were 2–3 day archive gaps (2022-02-27/28, 2022-04-02) with ordinary moves (−10% to +31%). The one extreme gap jump (BNX −98%, a token migration) was not held.
+
+Reading:
+- **The pre-specified test fails.** On the universe a live trader would actually have seen, variant B has a full-period Sharpe ≈ 0, MDD −80%, and loses heavily in 2024–2026.
+- **What changed versus the survivor universe (C1d, Sharpe 1.02).** C1d silently excluded newly listed, hyper-volatile names. Those are the names with the highest funding, so they are exactly what this strategy shorts.
+- **Funding is real but small next to squeeze risk.** Funding collected is large (+3.1 over the period). The short leg's exposure to squeezes in high-funding new listings dominates it.
+- **Untested ideas, not results:**
+  - intraday risk control (re-cap a weight once it drifts past the limit, or a stop);
+  - excluding names whose carry is extreme relative to the cross-section;
+  - a longer minimum listing age;
+  - capping the short leg with a squeeze-risk proxy (open interest, or volume spikes).
+
+Variant count: 11 configurations.
 
 (Re-run 2026-11-20 after the code review fixes: hedge instruments are no longer basket names,
 outages are held instead of closed, post-cost sizing. Flat decisions in the relative runs are

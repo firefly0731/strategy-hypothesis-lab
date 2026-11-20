@@ -50,7 +50,7 @@ def main(argv=None):
     else:
         symbols = list(binance_universe(a.quote)["symbol"])
     btc = f"BTC{a.quote}"
-    data = from_binance(symbols, a.start, a.end, bar=a.bar, factor_map={"BTC": btc}, workers=16,
+    data = from_binance(symbols, a.start, a.end, bar=a.bar, factor_map={"BTC": btc}, workers=8,
                         funding_min_qv=a.min_qv if a.min_qv > 0 else None)
     cfg = StrategyConfig(k=a.k, hedge_instruments=(btc,), costs=CostConfig.binance(a.quote),
                          neutral_mode=a.mode, rebalance_every=a.rebalance,

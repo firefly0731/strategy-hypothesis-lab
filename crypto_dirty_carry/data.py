@@ -20,7 +20,11 @@ contains only rows with time ≤ t.
 """
 from __future__ import annotations
 
+import io
 import json
+import threading
+import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import cached_property
@@ -233,19 +237,52 @@ def non_coin_symbols(cache: Path = DEFAULT_CACHE, refresh: bool = False) -> set[
     return out
 
 
-def _fetch(url: str, tries: int = 4):
+_local = threading.local()
+
+
+def _session() -> requests.Session:
+    """One keep-alive session per thread: thousands of archive requests otherwise exhaust the
+    ephemeral ports on Windows (WinError 10048)."""
+    s = getattr(_local, "s", None)
+    if s is None:
+        s = _local.s = requests.Session()
+    return s
+
+
+def _fetch(url: str, tries: int = 5):
     """data.binance.vision zip → DataFrame (None on 404), retrying dropped connections."""
-    import time
-
-    from crypto_intraday_momentum.data import _fetch_zip_csv
-
     for i in range(tries):
         try:
-            return _fetch_zip_csv(url)
-        except requests.exceptions.ConnectionError:
+            r = _session().get(url, timeout=60)
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+                raw = z.read(z.namelist()[0])
+            first = raw.split(b"\n", 1)[0]
+            return pd.read_csv(io.BytesIO(raw), header=0 if not first[:1].isdigit() else None)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             if i == tries - 1:
                 raise
+            _local.s = None
             time.sleep(2 ** i)
+
+
+def _month_funding(symbol: str, month: str, cache: Path) -> pd.DataFrame | None:
+    """Same cache layout and columns as crypto_intraday_momentum.data._month_funding."""
+    from crypto_intraday_momentum.data import BASE, _to_utc
+
+    path = cache / "funding" / symbol / f"{symbol}-fundingRate-{month}.parquet"
+    if path.exists():
+        return pd.read_parquet(path)
+    df = _fetch(f"{BASE}/fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip")
+    if df is None:
+        return None
+    out = pd.DataFrame({"time": _to_utc(df["calc_time"]).dt.floor("min"),
+                        "rate": df["last_funding_rate"].astype(float)})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_parquet(path, index=False)
+    return out
 
 
 def _klines(symbol: str, interval: str, start: str, end: str, cache: Path) -> pd.DataFrame | None:
@@ -282,7 +319,7 @@ def _funding_rest(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.Dat
     rows, t0 = [], int(start.value // 10**6)
     t_end = int(end.value // 10**6)
     while t0 < t_end:
-        r = requests.get(f"{FAPI}/fapi/v1/fundingRate", timeout=30,
+        r = _session().get(f"{FAPI}/fapi/v1/fundingRate", timeout=30,
                          params=dict(symbol=symbol, startTime=t0, endTime=t_end, limit=1000))
         r.raise_for_status()
         batch = r.json()
@@ -303,9 +340,15 @@ def _funding(symbol: str, start: str, end: str, cache: Path,
              traded_until: pd.Timestamp | None = None) -> pd.DataFrame:
     """Monthly archive (data.binance.vision); months not yet archived come from the REST API,
     but only while the symbol still has price data (no REST calls for delisted contracts)."""
-    from crypto_intraday_momentum.data import load_funding
-
-    arch = load_funding(symbol, start, end, cache=cache)
+    lo = pd.Period(start, freq="M")
+    if traded_until is not None:                      # no archive requests after delisting
+        hi = min(pd.Period(end, freq="M"), pd.Period(traded_until.tz_localize(None), freq="M"))
+    else:
+        hi = pd.Period(end, freq="M")
+    parts = [_month_funding(symbol, m, cache) for m in pd.period_range(lo, hi, freq="M").strftime("%Y-%m")] if hi >= lo else []
+    parts = [p for p in parts if p is not None and len(p)]
+    arch = (pd.concat(parts).drop_duplicates("time").sort_values("time").reset_index(drop=True)
+            if parts else pd.DataFrame(columns=["time", "rate"]))
     last = pd.Period(end, freq="M").end_time.tz_localize("UTC")
     if traded_until is not None:
         last = min(last, traded_until)
