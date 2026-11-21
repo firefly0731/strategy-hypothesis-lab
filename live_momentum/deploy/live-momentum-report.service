@@ -1,0 +1,14 @@
+[Unit]
+Description=live_momentum daily paper report (latest completed session)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=livemom
+Group=livemom
+WorkingDirectory=/opt/live_momentum/strategy-hypothesis-lab
+ExecStart=/opt/live_momentum/strategy-hypothesis-lab/.venv/bin/python -m live_momentum.paper_report --config /etc/live_momentum/config.toml
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/live_momentum /opt/live_momentum/strategy-hypothesis-lab/crypto_intraday_momentum/data_cache

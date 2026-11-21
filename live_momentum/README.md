@@ -4,8 +4,9 @@ Live / paper trading system for the adopted intraday momentum configuration
 (`crypto_intraday_momentum/`, see its README and IDEAS_LOG). The research code is the
 specification. This package reuses it unchanged wherever possible.
 
-**Status: Phase 0 (signal parity) only. This package sends no orders.** Exchange connectivity,
-risk enforcement, state storage, and systemd units come in Phase 1–2, after approval.
+**Status: Phase 1 (paper trading) is built and tested. This package sends no orders.** Phase 1
+runs on live public market data with virtual orders (`run_paper.py`, deployment in
+`deploy/DEPLOY.md`). Real order routing (Phase 2, testnet) needs separate approval.
 
 ## Adopted configuration (`strategy.py`)
 | item | value |
@@ -27,6 +28,16 @@ risk enforcement, state storage, and systemd units come in Phase 1–2, after ap
 | `executor.py` | `MakerChaseExecutor`: minute-driven order state machine with a pluggable venue. `SimBarVenue` uses the backtest fill rules (maker fills only when the price trades through the limit) |
 | `sizing_live.py` | `session_sizing(data, day)`: multipliers from sessions before `day` only |
 | `replay.py` | runs historical sessions through the live path minute by minute |
+| `binance_public.py` | public REST (klines, funding, exchangeInfo, server time) and WebSocket streams with reconnect and backoff. No keys, no signed endpoints. HTTP 403/451 stops the process |
+| `bar_store.py` | live 1m bars kept per UTC day on disk, merged with the archive for the history |
+| `history.py` | `prepare(session, bars, funding, ticks)`: history check, signals and sizing for the day |
+| `tape_venue.py` | paper venue on the live trade tape and book. A maker fill needs a trade through the limit; queue position is recorded (at-limit and through quantities) but not used for fills |
+| `paper.py` | `PaperTrader`: per-minute boundary driver, risk gate on entries, kill switch, end-of-day P&L with funding, state save/restore with catch-up of missed minutes |
+| `risk.py` | daily loss limit, per-symbol notional, gross leverage, stale data, clock offset. Exits are never blocked |
+| `persistence.py` | atomic JSON state, JSONL event log that rejects secret-named fields |
+| `run_paper.py` | asyncio runtime: streams → bar store / trader; opens the session, repairs missing bars by REST, hourly clock check |
+| `paper_report.py` | daily report: paper vs replay on the live bars vs replay on the archive |
+| `cli.py` | `kill`, `unkill`, `status` |
 | `config.py` | TOML config. Safe defaults (`dry_run=true`, `mode=replay`). Secrets come from the environment or a 0600 file and are never printed |
 
 ### Timing contract
@@ -61,5 +72,7 @@ python -c "from crypto_intraday_momentum.data import load_klines as l; [l(s,'202
 | `test_sizing_parity.py` | per-session Σ multiplier·unit return = `build_portfolio` + `drawdown_throttle`. Runs on synthetic data with and without funding, on a stressed case where the 3x cap and the throttle bind, and on real data with funding (last 60 sessions). Multipliers rebuilt from klines and funding cut at the open are identical |
 | `test_bars_executor.py` | bar grid identical to `load_klines` with outages. Executor scenarios: timeout → market, maker exit → flip entry next minute, orders resolve by the deadline |
 | `test_config.py` | safe defaults, order gating, invalid configs, secrets not printed |
+| `test_paper_integration.py` | paper trader on synthetic tape = backtest replay (maker and market-fallback paths); restart mid-session gives the same trades and the restored state is persisted at once; kill switch, daily loss limit, stale data; funding at the close of the bar ending at the settlement; the three report views agree |
+| `test_phase1_units.py` | venue fill rules, risk gate, bar store, REST parsing, event log (truncated lines, secret fields) |
 
-Reports: `reports/phase0.md`.
+Reports: `reports/phase0.md`, `reports/phase1_build.md`.

@@ -1,0 +1,22 @@
+[Unit]
+Description=live_momentum Phase 1 paper trader (no orders)
+Wants=network-online.target chronyd.service
+After=network-online.target time-sync.target chronyd.service
+
+[Service]
+Type=simple
+User=livemom
+Group=livemom
+WorkingDirectory=/opt/live_momentum/strategy-hypothesis-lab
+ExecStart=/opt/live_momentum/strategy-hypothesis-lab/.venv/bin/python -m live_momentum.run_paper --config /etc/live_momentum/config.toml --equity 10000
+Restart=always
+RestartSec=10
+# no API keys are needed in Phase 1; do not add an EnvironmentFile with keys here
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/live_momentum /var/log/live_momentum /opt/live_momentum/strategy-hypothesis-lab/crypto_intraday_momentum/data_cache
+
+[Install]
+WantedBy=multi-user.target

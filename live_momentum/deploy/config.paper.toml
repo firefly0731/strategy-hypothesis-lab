@@ -1,0 +1,14 @@
+# Phase 1 paper trading (no orders, no API keys). Install as /etc/live_momentum/config.toml
+mode = "paper"
+dry_run = true
+history_start = "2021-01"
+data_dir = "/var/lib/live_momentum/data"
+state_dir = "/var/lib/live_momentum/state"
+log_dir = "/var/log/live_momentum"
+
+[risk]
+daily_max_loss_pct = 0.03        # paper: loose enough not to bind on normal days (report shows if it does)
+max_notional_per_symbol = 0.0    # not used in paper
+max_gross_leverage = 3.0         # paper mirrors the backtest; Phase 3 starts at <= 1.0
+stale_data_sec = 10.0
+kill_switch_file = "/var/lib/live_momentum/KILL"

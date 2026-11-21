@@ -15,6 +15,7 @@ from crypto_intraday_momentum.run import TICKS
 from crypto_intraday_momentum.sessions import US
 
 SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT")
+TICKS_RESEARCH = dict(TICKS)       # ticks hard-coded in the backtest (checked against exchangeInfo)
 SESSION = US
 RULES = dict(entry_cutoff_min=270, vwap_confirm_k=0.6)
 EXEC_NAME = "maker_chase"

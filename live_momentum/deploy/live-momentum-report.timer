@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily paper report: right after the US close, and again when the archive is out
+
+[Timer]
+# 21:20 UTC: after 16:00 New York in both EST and EDT (paper vs replay on collected bars)
+OnCalendar=*-*-* 21:20:00 UTC
+# 12:00 UTC next day: the daily archive is usually published -> adds the archive comparison
+OnCalendar=*-*-* 12:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

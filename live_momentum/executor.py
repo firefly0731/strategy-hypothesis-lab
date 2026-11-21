@@ -21,7 +21,7 @@ on the live order book and the Binance venue come in later phases.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Callable, Protocol
 
 import numpy as np
@@ -91,6 +91,10 @@ class MakerChaseExecutor:
     n_min: int
     qty_fn: Callable[[int, float], float]      # (t, last) -> order quantity for a new entry
     cid_prefix: str = "lm"
+    # risk gate for NEW entries: (t, side, qty) -> approved qty (<= 0 blocks the entry).
+    # Exits are never gated: they only reduce risk.
+    gate: Callable[[int, int, float], float] | None = None
+    listener: Callable[[tuple], None] | None = None   # receives every log event
     pos: int = 0
     qty: float = 0.0
     entry: Fill | None = None
@@ -127,15 +131,29 @@ class MakerChaseExecutor:
         nxt = int(self.dec_min[j + 1]) if j + 1 < len(self.dec_min) else self.n_min
         return min(nxt, self.eod_start)
 
+    def _emit(self, ev: tuple) -> None:
+        self.log.append(ev)
+        if self.listener is not None:
+            self.listener(ev)
+
     def _send(self, t: int, last: float, kind: str, side: int, qty: float, end: int, **kw) -> None:
         o = _Order(self._cid(kind[0]), kind, side, qty, self._limit(last, side), t, end, **kw)
         self.venue.post_only(o.cid, side, qty, o.limit, t, reduce_only=(kind == "exit"))
         self.working = o
-        self.log.append((t, "post", kind, side, o.limit, o.cid))
+        self._emit((t, "post", kind, side, o.limit, o.cid))
+
+    def _send_entry(self, t: int, last: float, side: int, end: int, dec_j: int) -> None:
+        qty = self.qty_fn(t, last)
+        if self.gate is not None:
+            qty = self.gate(t, side, qty)
+        if not qty or qty <= 0:
+            self._emit((t, "blocked", "entry", side, last, None))
+            return
+        self._send(t, last, "entry", side, qty, end, dec_j=dec_j)
 
     def _filled(self, o: _Order, f: Fill) -> None:
         self.working = None
-        self.log.append((f.bar, "fill", o.kind, f.side, f.price, "maker" if f.maker else "taker"))
+        self._emit((f.bar, "fill", o.kind, f.side, f.price, "maker" if f.maker else "taker"))
         if o.kind == "entry":
             self.pos, self.qty, self.entry, self.entry_j = o.side, f.qty, f, o.dec_j
             self.entry_kind = ("first" if self.last_exit is None else
@@ -163,7 +181,7 @@ class MakerChaseExecutor:
         o = self.working
         if o is not None and t >= o.end:
             self.venue.cancel(o.cid, t)
-            self.log.append((t, "cancel", o.kind, o.side, o.limit, o.cid))
+            self._emit((t, "cancel", o.kind, o.side, o.limit, o.cid))
             f = self.venue.market(self._cid("m"), o.side, o.qty, t, reduce_only=(o.kind == "exit"))
             self._filled(o, f)
         # 3) entry waiting for its exit
@@ -172,7 +190,7 @@ class MakerChaseExecutor:
             self.pending = None
             if p.at < p.deadline:
                 end = min(p.at + self.cfg.maker_timeout, p.deadline)
-                self._send(t, last, "entry", p.want, self.qty_fn(t, last), end, dec_j=p.dec_j)
+                self._send_entry(t, last, p.want, end, p.dec_j)
         # 4) decision
         k = np.flatnonzero(self.dec_min == t)
         if want_fn is not None and k.size:
@@ -188,7 +206,7 @@ class MakerChaseExecutor:
                                reason="flip" if want else "stop",
                                follow=(want, j, deadline) if want else None)
                 elif t < deadline:
-                    self._send(t, last, "entry", want, self.qty_fn(t, last), end, dec_j=j)
+                    self._send_entry(t, last, want, end, j)
         # 5) end of day
         if self.pos != 0 and self.working is None:
             t_eod = max(self.eod_start, self.entry.bar + 1)
@@ -197,6 +215,59 @@ class MakerChaseExecutor:
             elif t >= self.n_min:
                 o = _Order(self._cid("m"), "exit", -self.pos, self.qty, np.nan, t, t, reason="eod")
                 self._filled(o, self.venue.market(o.cid, o.side, o.qty, t, reduce_only=True))
+
+    # ------------------------------------------------------------------ risk actions
+    def flatten(self, t: int, reason: str) -> None:
+        """Cancel everything and close the position at market now (risk limit / kill switch)."""
+        o = self.working
+        if o is not None:
+            self.venue.cancel(o.cid, t)
+            self._emit((t, "cancel", o.kind, o.side, o.limit, o.cid))
+            self.working = None
+        if self.pending is not None:
+            self._emit((t, "drop_pending", "entry", self.pending.want, None, None))
+            self.pending = None
+        if self.pos != 0:
+            x = _Order(self._cid("k"), "exit", -self.pos, self.qty, np.nan, t, t, reason=reason)
+            self._filled(x, self.venue.market(x.cid, x.side, x.qty, t, reduce_only=True))
+
+    # ------------------------------------------------------------------ persistence
+    _STATE = ("pos", "qty", "entry_j", "entry_kind", "last_exit", "_seq")
+
+    def to_state(self) -> dict:
+        d = {k: getattr(self, k) for k in self._STATE}
+        d["entry"] = asdict(self.entry) if self.entry else None
+        d["working"] = asdict(self.working) if self.working else None
+        d["pending"] = asdict(self.pending) if self.pending else None
+        d["trades"] = [asdict(r) for r in self.trades]
+        return _jsonable(d)
+
+    def load_state(self, d: dict) -> None:
+        for k in self._STATE:
+            setattr(self, k, d[k])
+        self.entry = Fill(**d["entry"]) if d["entry"] else None
+        w = d["working"]
+        if w:
+            w = dict(w)
+            if w.get("follow") is not None:
+                w["follow"] = tuple(w["follow"])
+            self.working = _Order(**w)
+        else:
+            self.working = None
+        self.pending = _Pending(**d["pending"]) if d["pending"] else None
+        self.trades = [TradeRecord(**r) for r in d["trades"]]
+
+
+def _jsonable(x):
+    if isinstance(x, dict):
+        return {k: _jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_jsonable(v) for v in x]
+    if isinstance(x, np.generic):
+        return x.item()
+    if isinstance(x, float) and not np.isfinite(x):
+        return None
+    return x
 
 
 class SimBarVenue:
