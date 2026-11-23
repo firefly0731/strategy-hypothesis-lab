@@ -1,0 +1,16 @@
+# Phase 1 paper trading on a Windows host (no orders, no API keys).
+# Paths are relative to the repo root (the scheduled tasks run from there).
+# live_momentum/runtime/ is git-ignored: collected data, state and logs never get committed.
+mode = "paper"
+dry_run = true
+history_start = "2021-01"
+data_dir = "live_momentum/runtime/data"
+state_dir = "live_momentum/runtime/state"
+log_dir = "live_momentum/runtime/log"
+
+[risk]
+daily_max_loss_pct = 0.03        # paper: loose enough not to bind on normal days (report shows if it does)
+max_notional_per_symbol = 0.0    # not used in paper
+max_gross_leverage = 3.0         # paper mirrors the backtest; Phase 3 starts at <= 1.0
+stale_data_sec = 10.0
+kill_switch_file = "live_momentum/runtime/KILL"

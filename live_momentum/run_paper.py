@@ -52,6 +52,7 @@ class App:
         self.eventlog: EventLog | None = None
         self.open_retry_at = 0.0       # backoff after a failed session open
         self.open_backoff = 60.0
+        self.fatal: BaseException | None = None   # AccessRestricted from a background task: stop
 
     # ---------------------------------------------------------------- setup
     def check_exchange(self):
@@ -132,6 +133,10 @@ class App:
                 tr.start_session(prep)
             self.trader = tr
             self.open_backoff = 60.0
+        except AccessRestricted as e:                 # region restriction: stop, never retry around it
+            log.error("%s", e)
+            self.fatal = e
+            self.stop.set()
         except Exception as e:
             log.exception("session open failed; retry in %.0f s", self.open_backoff)
             if self.eventlog is not None:
@@ -144,16 +149,27 @@ class App:
     def equity_now(self) -> float:
         from .persistence import read_json
         st = read_json(Path(self.cfg.state_dir) / "paper_equity.json")
-        return float(st["equity"]) if st else self.equity
+        if st:
+            return float(st["equity"])
+        if any((Path(self.data) / "paper").glob("*/events.jsonl")):
+            log.warning("paper_equity.json missing after earlier sessions: sizing from --equity %.2f", self.equity)
+        return self.equity
 
-    def close_session(self, sess):
-        from .persistence import atomic_write_json, read_json
+    def session_funding(self, sess) -> dict:
+        """REST only (runs in a worker thread). Never touches the trader."""
         fr = {}
         for s in self.cfg.symbols:
             try:
                 fr[s] = self.rest.funding(s, sess.start - pd.Timedelta(hours=1))
+            except AccessRestricted:
+                raise
             except Exception as e:      # noqa: BLE001
                 log.warning("funding fetch failed for %s: %s", s, e)
+        return fr
+
+    def close_session(self, sess, fr: dict):
+        """Runs on the event-loop thread, so stream callbacks cannot interleave with end_session."""
+        from .persistence import atomic_write_json, read_json
         summary = self.trader.end_session(fr)
         path = Path(self.cfg.state_dir) / "paper_equity.json"
         hist = (read_json(path) or {}).get("history", [])
@@ -184,6 +200,8 @@ class App:
             now = now_utc()
             nxt = now.floor("min") + ONE_MIN
             await asyncio.sleep((nxt - now).total_seconds() + GRACE_S)
+            if self.fatal is not None:
+                raise self.fatal
             await self.ensure_bar(nxt - ONE_MIN)
             for st in self.stores.values():
                 st.flush()
@@ -209,7 +227,8 @@ class App:
                         missed = {s: st.frame(sess.start) for s, st in self.stores.items()}
                     tr.on_boundary(nxt, missed)
                 if tr.finished and not tr.closed and nxt >= sess.end:
-                    await asyncio.to_thread(self.close_session, sess)
+                    fr = await asyncio.to_thread(self.session_funding, sess)
+                    self.close_session(sess, fr)
 
     # ---------------------------------------------------------------- main
     async def run(self):

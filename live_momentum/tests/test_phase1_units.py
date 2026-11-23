@@ -62,10 +62,13 @@ def test_market_at_book_or_last_when_stale():
     v, c = venue()
     assert v.market("m1", +1, 1.0, 3, False).price == 100.0
     assert v.market("m2", -1, 1.0, 3, False).price == 99.9
-    v.on_trade(101.0, 1.0, T0 + 1)
-    c.ms = T0 + 60_000                                    # book 60 s old
+    v.on_trade(101.0, 1.0, T0 + 58_000)
+    c.ms = T0 + 60_000                                    # book 60 s old, last trade 2 s old
     f = v.market("m3", +1, 1.0, 3, False)
     assert f.price == 101.0 and not f.maker and v.events[-1][5] == "last"
+    c.ms = T0 + 120_000                                   # last trade also stale: flagged
+    f = v.market("m4", -1, 1.0, 3, False)
+    assert f.price == 101.0 and v.events[-1][5] == "last_stale"
 
 
 def test_catchup_uses_bar_rule_and_state_roundtrip():
@@ -98,6 +101,14 @@ def test_symbol_cap_and_gross_leverage(tmp_path):
     assert q * 2_000 == pytest.approx(1_000) and why == "gross_leverage"
     q, why = r.approve_entry("BTCUSDT", 1, 1.0, 2_000.0, {"ETHUSDT": 10_000}, 0.1)
     assert q == 0
+    # the symbol's own open exposure counts too
+    q, why = r.approve_entry("BTCUSDT", 1, 1.0, 2_000.0, {"BTCUSDT": 9_000}, 0.1)
+    assert q * 2_000 == pytest.approx(1_000) and why == "gross_leverage"
+
+
+def test_unknown_exposure_blocks_entries(tmp_path):
+    r = rm(tmp_path)
+    assert r.approve_entry("BTCUSDT", 1, 0.1, 1_000.0, {"ETHUSDT": float("nan")}, 0.1) == (0.0, "unknown_exposure")
 
 
 def test_stale_clock_kill_and_loss(tmp_path):
@@ -210,3 +221,14 @@ def test_eventlog_rejects_secret_at_any_depth(tmp_path):
         deep = {"a": deep}
     with pytest.raises(Exception):
         EventLog(tmp_path / "e.jsonl").write("t", d=deep)
+
+
+def test_ws_handshake_status_is_read_from_websockets_exceptions():
+    from websockets.datastructures import Headers
+    from websockets.exceptions import InvalidStatus
+    from websockets.http11 import Response
+
+    from live_momentum.binance_public import ws_status
+    for code in (403, 451):
+        assert ws_status(InvalidStatus(Response(code, "x", Headers()))) == code
+    assert ws_status(OSError("connection reset")) is None

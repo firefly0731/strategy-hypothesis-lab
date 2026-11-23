@@ -74,5 +74,6 @@ python -c "from crypto_intraday_momentum.data import load_klines as l; [l(s,'202
 | `test_config.py` | safe defaults, order gating, invalid configs, secrets not printed |
 | `test_paper_integration.py` | paper trader on synthetic tape = backtest replay (maker and market-fallback paths); restart mid-session gives the same trades and the restored state is persisted at once; kill switch, daily loss limit, stale data; funding at the close of the bar ending at the settlement; the three report views agree |
 | `test_phase1_units.py` | venue fill rules, risk gate, bar store, REST parsing, event log (truncated lines, secret fields) |
+| `test_run_paper.py` | a region restriction during the session open stops the app (no retry); other errors retry with backoff |
 
 Reports: `reports/phase0.md`, `reports/phase1_build.md`.

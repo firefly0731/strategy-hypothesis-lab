@@ -130,7 +130,8 @@ class TapeVenue:
         px = (b.ask if side > 0 else b.bid) if fresh else np.nan
         src = "book"
         if not np.isfinite(px):
-            px, src = b.last, "last"
+            px = b.last
+            src = "last" if now - b.last_ts <= self.book_stale_ms else "last_stale"
         self.events.append(("market", cid, side, qty, px, src, b.bid, b.ask))
         return Fill(cid, side, qty, float(px), t, False)
 

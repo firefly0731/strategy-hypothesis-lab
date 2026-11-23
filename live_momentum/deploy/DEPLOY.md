@@ -1,6 +1,28 @@
-# Deploying Phase 1 (paper trading) on AWS Tokyo (ap-northeast-1)
+# Deploying Phase 1 (paper trading)
 
 Phase 1 sends no orders and needs no API keys.
+
+## Windows host (current)
+Runs from the repo checkout with the existing `.venv`. Collected data, state and logs go to the git-ignored
+`live_momentum/runtime/`.
+```powershell
+powershell -ExecutionPolicy Bypass -File live_momentum\deploy\windows\install_tasks.ps1   # per-user tasks, no admin
+Start-ScheduledTask LiveMomentumPaper                                                       # start now
+```
+- `LiveMomentumPaper` starts at logon. A supervisor restarts the trader 10 s after any exit. It stops for good on exit
+  code 2 (Binance access restricted).
+- `LiveMomentumReport` runs daily at 06:20 and 21:00 KST (21:20 and 12:00 UTC).
+- Both tasks run only while this user is logged on. Disconnect the remote session instead of signing out, and keep
+  the machine from sleeping.
+- Clock: Windows Time must be synced. Check with `w32tm /query /status`. The trader blocks entries if it is more than 1 s
+  off Binance.
+- Logs: `live_momentum\runtime\log\` (`paper.log`, `supervisor.log`). Events and reports: `live_momentum\runtime\data\`.
+- Kill switch: `.venv\Scripts\python -m live_momentum.cli kill --config live_momentum\deploy\windows\config.paper.toml`
+- Stop: `Stop-ScheduledTask LiveMomentumPaper`. This stops the supervisor. If a python process is still running,
+  end it with `Get-Process python`.
+- Remove: `Unregister-ScheduledTask LiveMomentumPaper,LiveMomentumReport -Confirm:$false`
+
+## Linux host on AWS Tokyo (ap-northeast-1)
 
 ## 1. Host
 - Ubuntu 22.04/24.04, 2 vCPU / 4 GB is enough (about 20 s of CPU at each open for the history replay).

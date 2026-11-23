@@ -14,6 +14,8 @@ force a flatten; they never open or enlarge positions.
 """
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -61,12 +63,14 @@ class RiskManager:
             return 0.0, "clock_offset"
         if qty <= 0 or not price > 0:
             return 0.0, "bad_qty"
+        expo = [abs(v) for v in open_notional.values()]
+        if not all(math.isfinite(v) for v in expo):
+            return 0.0, "unknown_exposure"      # an open position without a price: do not add risk
         notional = qty * price
         reason = None
         if lim.max_notional_per_symbol > 0 and notional > lim.max_notional_per_symbol:
             notional, reason = lim.max_notional_per_symbol, "symbol_cap"
-        room = lim.max_gross_leverage * self.equity_open - sum(
-            abs(v) for k, v in open_notional.items() if k != sym)
+        room = lim.max_gross_leverage * self.equity_open - sum(expo)
         if notional > room:
             notional, reason = max(room, 0.0), "gross_leverage"
         return notional / price, reason

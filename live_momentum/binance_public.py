@@ -129,6 +129,15 @@ def ws_kline_row(k: dict) -> tuple[pd.Timestamp, dict]:
                  volume=float(k["v"]), quote_volume=float(k["q"]), taker_buy_volume=float(k["V"])))
 
 
+def ws_status(e: BaseException) -> int | None:
+    """HTTP status of a rejected WebSocket handshake (websockets >= 14: e.response.status_code;
+    older: e.status_code), else None."""
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    if code is None:
+        code = getattr(e, "status_code", None)
+    return int(code) if isinstance(code, int) else None
+
+
 async def stream(url: str, streams: list[str], on_message, stop: asyncio.Event,
                  on_connect=None, max_backoff: float = 30.0):
     """Combined-stream consumer with reconnects. on_message(stream_name, data, recv_ms)."""
@@ -155,7 +164,7 @@ async def stream(url: str, streams: list[str], on_message, stop: asyncio.Event,
                     if "stream" in msg:
                         on_message(msg["stream"], msg["data"], int(time.time() * 1000))
         except Exception as e:                                     # noqa: BLE001 - reconnect on anything
-            if getattr(e, "status_code", None) in (403, 451) or "451" in str(e):
+            if ws_status(e) in (403, 451):
                 raise AccessRestricted(f"websocket {url}: {e}") from e
             log.warning("stream %s error %s: %s; reconnect in %.0fs", url, type(e).__name__, e, backoff)
         if not stop.is_set():
