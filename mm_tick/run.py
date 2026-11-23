@@ -85,11 +85,12 @@ def summary(group: str) -> pd.DataFrame:
     rows = []
     for L in E.LS:
         for q in E.QS:
-            frames = [pd.read_parquet(RES / f"ev_{s}_L{L}_q{q}.parquet").assign(sym=s) for s in syms]
-            df = pd.concat(frames, ignore_index=True)
             for d in E.DELAYS_MS:
                 for h in E.HORIZONS_S:
                     col = f"g_d{d}_h{h}"
+                    df = pd.concat([pd.read_parquet(RES / f"ev_{s}_L{L}_q{q}.parquet",
+                                                    columns=["ctl", "day", "cost", col]) for s in syms],
+                                   ignore_index=True)
                     for ctl in (False, True):
                         x = df[~df[col].isna() & (df["ctl"] == ctl)]
                         net = x[col] - x["cost"]
