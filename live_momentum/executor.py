@@ -183,7 +183,11 @@ class MakerChaseExecutor:
             self.venue.cancel(o.cid, t)
             self._emit((t, "cancel", o.kind, o.side, o.limit, o.cid))
             f = self.venue.market(self._cid("m"), o.side, o.qty, t, reduce_only=(o.kind == "exit"))
-            self._filled(o, f)
+            if o.kind == "entry" and not f.qty > 0:          # real venue refused the entry
+                self.working = None
+                self._emit((t, "blocked", "entry", o.side, f.price, "venue_refused"))
+            else:
+                self._filled(o, f)
         # 3) entry waiting for its exit
         p = self.pending
         if p is not None and p.at <= t:

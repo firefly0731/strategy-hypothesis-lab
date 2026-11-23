@@ -25,6 +25,10 @@ MODES = ("replay", "paper", "testnet", "live")
 ACK_ENV = "LIVE_MOMENTUM_ACK"
 ACK_VALUES = {"testnet": "phase2-testnet", "live": "phase3-live"}
 ACK_MAX_DAYS = 31
+SIZE_MODES = ("strategy", "min")
+MAX_GROSS = 3.0               # strategy sizing
+MAX_GROSS_MIN_SIZE = 4.0      # size_mode="min": exchange-minimum quantities on a tiny account
+MIN_SIZE_NOTIONAL_CAP = 100.0 # size_mode="min": per-symbol notional cap must be <= this (USDT)
 
 
 def ack_valid(mode: str, value: str | None, today: dt.date | None = None) -> bool:
@@ -62,8 +66,8 @@ class RiskLimits:
                 raise ConfigError(f"risk.{f.name} must be a number")
         if not 0 < self.daily_max_loss_pct < 0.2:
             raise ConfigError("daily_max_loss_pct must be in (0, 0.2)")
-        if self.max_gross_leverage <= 0 or self.max_gross_leverage > 3.0:
-            raise ConfigError("max_gross_leverage must be in (0, 3]")
+        if self.max_gross_leverage <= 0 or self.max_gross_leverage > MAX_GROSS_MIN_SIZE:
+            raise ConfigError(f"max_gross_leverage must be in (0, {MAX_GROSS_MIN_SIZE}]")
         if self.stale_data_sec <= 0:
             raise ConfigError("stale_data_sec must be > 0")
         if mode in ("testnet", "live") and self.max_notional_per_symbol <= 0:
@@ -113,6 +117,7 @@ class LiveConfig:
     state_dir: str = "/var/lib/live_momentum/state"
     log_dir: str = "/var/log/live_momentum"
     secrets_file: str | None = None
+    size_mode: str = "strategy"             # "min": every entry at the exchange minimum quantity
     risk: RiskLimits = RiskLimits()
 
     def validate(self) -> "LiveConfig":
@@ -127,6 +132,12 @@ class LiveConfig:
         if not 0 <= self.capital_fraction <= 1:
             raise ConfigError("capital_fraction must be in [0, 1]")
         self.risk.validate(self.mode)
+        if self.size_mode not in SIZE_MODES:
+            raise ConfigError(f"size_mode must be one of {SIZE_MODES}")
+        if self.size_mode == "strategy" and self.risk.max_gross_leverage > MAX_GROSS:
+            raise ConfigError(f"max_gross_leverage must be <= {MAX_GROSS} with strategy sizing")
+        if self.size_mode == "min" and not 0 < self.risk.max_notional_per_symbol <= MIN_SIZE_NOTIONAL_CAP:
+            raise ConfigError(f"size_mode='min' needs 0 < max_notional_per_symbol <= {MIN_SIZE_NOTIONAL_CAP}")
         if self.mode in ("replay", "paper") and not self.dry_run:
             raise ConfigError(f"mode={self.mode} never sends orders; dry_run must stay true")
         return self

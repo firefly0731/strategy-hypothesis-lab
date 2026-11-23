@@ -1,0 +1,18 @@
+# Phase 3 live trading on this Windows host: REAL ORDERS on Binance USDⓈ-M futures.
+# Orders also need LIVE_MOMENTUM_ACK=phase3-live:<last valid UTC date> in the environment (set by the user).
+# size_mode="min": every entry at the exchange minimum quantity (min notional + 5 %), on a tiny account.
+mode = "live"
+dry_run = false
+size_mode = "min"
+history_start = "2021-01"
+data_dir = "live_momentum/runtime/live/data"
+state_dir = "live_momentum/runtime/live/state"
+log_dir = "live_momentum/runtime/live/log"
+secrets_file = "live_momentum/runtime/live.secrets"   # BINANCE_API_KEY / BINANCE_API_SECRET, git-ignored
+
+[risk]
+daily_max_loss_pct = 0.10        # ~28 USDT account: 10 % = ~2.8 USDT (3 % would trip on a 1.4 % BTC move)
+max_notional_per_symbol = 100.0  # USDT; the minimum orders are ~61 (BTC), ~23 (ETH), ~6 (SOL)
+max_gross_leverage = 3.5         # three minimum orders ~= 89 USDT on ~28 USDT equity (user decision 2026-11-23)
+stale_data_sec = 10.0
+kill_switch_file = "live_momentum/runtime/live/KILL"

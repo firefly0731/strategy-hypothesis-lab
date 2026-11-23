@@ -4,7 +4,7 @@ Live / paper trading system for the adopted intraday momentum configuration
 (`crypto_intraday_momentum/`, see its README and IDEAS_LOG). The research code is the
 specification. This package reuses it unchanged wherever possible.
 
-**Status: Phase 1 (paper trading) is built and tested. This package sends no orders.** Phase 1
+**Status: Phase 1 (paper trading) runs on the Windows host. Phase 3 live code (minimum-size test) is built and tested on a fake exchange; it sends orders only with the user's LIVE_MOMENTUM_ACK.** Phase 1
 runs on live public market data with virtual orders (`run_paper.py`, deployment in
 `deploy/DEPLOY.md`). Real order routing (Phase 2, testnet) needs separate approval.
 
@@ -38,6 +38,10 @@ runs on live public market data with virtual orders (`run_paper.py`, deployment 
 | `run_paper.py` | asyncio runtime: streams → bar store / trader; opens the session, repairs missing bars by REST, hourly clock check |
 | `paper_report.py` | daily report: paper vs replay on the live bars vs replay on the archive |
 | `cli.py` | `kill`, `unkill`, `status` |
+| `binance_signed.py` | signed REST: orders with idempotent `newClientOrderId` (a timeout or 5xx is resolved by looking the order up, never by re-sending), cancel, positions, balances, listenKey, key-permission check. Signatures are redacted from logs |
+| `live_venue.py` | real venue: post-only GTX limits, reduce-only exits, fills confirmed by REST each minute and by the user data stream. A partial maker fill is carried into the follow-up market order. A refused entry is a zero fill (blocked), a refused exit stops trading |
+| `live.py` | `LiveTrader`: account must be flat at a fresh start, reconcile after a restart, no replay of missed minutes, `size_mode="min"`, emergency flatten from the exchange's own positions, P&L from the exchange's trades |
+| `run_live.py` | live runtime: preflight (key, one-way mode, USDT), public streams + user data stream, `--flatten` |
 | `config.py` | TOML config. Safe defaults (`dry_run=true`, `mode=replay`). Secrets come from the environment or a 0600 file and are never printed |
 
 ### Timing contract
@@ -74,6 +78,7 @@ python -c "from crypto_intraday_momentum.data import load_klines as l; [l(s,'202
 | `test_config.py` | safe defaults, order gating, invalid configs, secrets not printed |
 | `test_paper_integration.py` | paper trader on synthetic tape = backtest replay (maker and market-fallback paths); restart mid-session gives the same trades and the restored state is persisted at once; kill switch, daily loss limit, stale data; funding at the close of the bar ending at the settlement; the three report views agree |
 | `test_phase1_units.py` | venue fill rules, risk gate, bar store, REST parsing, event log (truncated lines, secret fields) |
+| `test_live.py` | live trader on a fake Binance (TapeVenue rules behind a REST facade) = backtest replay; partial fills, cancel/fill race, post-only reject, refused entry/exit, reconcile after restart, mismatch flatten, kill with a partially filled entry, flatten per symbol, signature redaction, min-size rules, key permissions |
 | `test_run_paper.py` | a region restriction during the session open stops the app (no retry); other errors retry with backoff |
 
 Reports: `reports/phase0.md`, `reports/phase1_build.md`.

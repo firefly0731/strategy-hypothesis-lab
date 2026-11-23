@@ -74,6 +74,7 @@ class PublicRest:
                     status=s["status"], contract=s["contractType"],
                     tick=float(f["PRICE_FILTER"]["tickSize"]), step=float(f["LOT_SIZE"]["stepSize"]),
                     market_step=float(f["MARKET_LOT_SIZE"]["stepSize"]),
+                    min_qty=float(f["LOT_SIZE"]["minQty"]),
                     min_notional=float(f.get("MIN_NOTIONAL", {}).get("notional", 0.0)))
         return out
 

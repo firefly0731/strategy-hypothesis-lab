@@ -6,6 +6,7 @@ keys that look like secrets as a second line of defence.
 from __future__ import annotations
 
 import json
+import re
 import logging
 import os
 import tempfile
@@ -38,6 +39,38 @@ def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+_SIG = re.compile(r"(signature|listenKey)=[0-9A-Za-z]+")
+_WS_KEY = re.compile(r"(/ws/)[0-9A-Za-z]{16,}")       # user data stream URL path carries the listenKey
+
+
+def redact(text: str) -> str:
+    """Strip request signatures / listen keys from text (exception messages carry URLs)."""
+    return _WS_KEY.sub(lambda m: m.group(1) + "***", _SIG.sub(lambda m: m.group(1) + "=***", text))
+
+
+class RedactFilter(logging.Filter):
+    """Logging filter: redact signatures from every record (including tracebacks)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if record.exc_info and not record.exc_text:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+        record.msg, record.args = redact(msg), ()
+        if record.exc_text:
+            record.exc_text = redact(record.exc_text)
+        return True
+
+
+def _scrub(obj):
+    if isinstance(obj, str):
+        return redact(obj)
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub(v) for v in obj]
+    return obj
+
+
 def _check(obj, depth=0):
     if depth > 50:
         raise ValueError("event too deeply nested to check for secrets")
@@ -62,6 +95,7 @@ class EventLog:
     def write(self, type_: str, **fields) -> dict:
         rec = {"ts": self.clock_ms(), "type": type_, **fields}
         _check(rec)
+        rec = _scrub(rec)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, default=str) + "\n")
         return rec

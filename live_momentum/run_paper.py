@@ -31,6 +31,7 @@ from .signal_engine import session_for
 from .strategy import HISTORY_START, TICKS_RESEARCH
 
 log = logging.getLogger("live_momentum")
+
 GRACE_S = 1.0          # wait after the boundary before looking for the closed bar
 BAR_WAIT_S = 4.0       # then wait up to this long for the stream before REST repair
 
@@ -40,6 +41,8 @@ def now_utc() -> pd.Timestamp:
 
 
 class App:
+    FATAL_OPEN: tuple = (AccessRestricted,)   # errors in the session open that stop the process
+
     def __init__(self, cfg, equity: float):
         self.cfg = cfg
         self.data = Path(cfg.data_dir)
@@ -127,13 +130,12 @@ class App:
             self.eventlog = EventLog(day_dir / "events.jsonl")
             bars, funding = await asyncio.to_thread(self._history, sess)
             prep = await asyncio.to_thread(prepare, sess, bars, funding, {s: exch[s]["tick"] for s in exch})
-            tr = PaperTrader(self.cfg, exch, lambda: int(time.time() * 1000), self.eventlog,
-                             Path(self.cfg.state_dir) / "paper_state.json", self.equity_now())
-            if not tr.restore(prep):
-                tr.start_session(prep)
+            tr = await asyncio.to_thread(self.new_trader, exch)
+            if not await asyncio.to_thread(tr.restore, prep):
+                await asyncio.to_thread(tr.start_session, prep)
             self.trader = tr
             self.open_backoff = 60.0
-        except AccessRestricted as e:                 # region restriction: stop, never retry around it
+        except self.FATAL_OPEN as e:                  # region restriction etc.: stop, never retry
             log.error("%s", e)
             self.fatal = e
             self.stop.set()
@@ -145,6 +147,10 @@ class App:
             self.open_backoff = min(self.open_backoff * 2, 900.0)
         finally:
             self.preparing = False
+
+    def new_trader(self, exch):
+        return PaperTrader(self.cfg, exch, lambda: int(time.time() * 1000), self.eventlog,
+                           Path(self.cfg.state_dir) / "paper_state.json", self.equity_now())
 
     def equity_now(self) -> float:
         from .persistence import read_json

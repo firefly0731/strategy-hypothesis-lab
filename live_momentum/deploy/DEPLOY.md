@@ -22,6 +22,31 @@ Start-ScheduledTask LiveMomentumPaper                                           
   end it with `Get-Process python`.
 - Remove: `Unregister-ScheduledTask LiveMomentumPaper,LiveMomentumReport -Confirm:$false`
 
+## Live trading on the Windows host (Phase 3, REAL ORDERS)
+Minimum-size test: every entry at the exchange minimum quantity (`size_mode = "min"`), config
+`live_momentum\deploy\windows\config.live.toml`. Keys: `live_momentum\runtime\live.secrets` (git-ignored, user-only ACL).
+
+Before the first start:
+1. Put USDT in the futures wallet. Multi-Assets mode is off, so USDC cannot margin USDT contracts.
+2. Keep the account flat in BTCUSDT/ETHUSDT/SOLUSDT. At a fresh session start the trader refuses to trade if
+   it finds a position or an open order there.
+3. Approve Phase 3 by setting the token yourself (at most 31 days ahead):
+   `[Environment]::SetEnvironmentVariable("LIVE_MOMENTUM_ACK", "phase3-live:2026-12-20", "User")`
+4. `powershell -ExecutionPolicy Bypass -File live_momentum\deploy\windows\install_live_task.ps1`, then
+   `Start-ScheduledTask LiveMomentumLive`.
+
+At start the trader checks the key (withdrawals and transfers off, IP whitelist on, futures on), one-way mode and the
+USDT wallet. It exits with code 3 if a check fails, 4 if orders are not enabled (token), 2 on a region restriction.
+The supervisor does not restart after these codes.
+
+| what | how |
+|---|---|
+| log | `live_momentum\runtime\live\log\live.log`, events `live_momentum\runtime\live\data\paper\<date>\events.jsonl` |
+| kill switch (cancel + flatten at the next minute, no new entries) | `.venv\Scripts\python -m live_momentum.cli kill --config live_momentum\deploy\windows\config.live.toml` |
+| flatten now, without the trader | `.venv\Scripts\python -m live_momentum.run_live --config live_momentum\deploy\windows\config.live.toml --flatten` |
+| stop | `Stop-ScheduledTask LiveMomentumLive`. Positions stay open: use the kill switch first |
+| revoke approval | `[Environment]::SetEnvironmentVariable("LIVE_MOMENTUM_ACK", $null, "User")` (applies at the next start) |
+
 ## Linux host on AWS Tokyo (ap-northeast-1)
 
 ## 1. Host

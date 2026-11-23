@@ -51,8 +51,7 @@ def floor_step(qty: float, step: float) -> float:
 class PaperTrader:
     def __init__(self, cfg: LiveConfig, exch: dict, clock_ms, log: EventLog, state_path: Path,
                  equity: float, history_days: int = 45):
-        if cfg.mode != "paper" or not cfg.dry_run:
-            raise ValueError("PaperTrader requires mode='paper' and dry_run=true")
+        self._check_mode(cfg)
         self.cfg, self.exch, self.clock_ms, self.log = cfg, exch, clock_ms, log
         self.state_path = Path(state_path)
         self.equity = equity
@@ -64,6 +63,14 @@ class PaperTrader:
         self.finished = False
         self.closed = False          # end_session done (equity booked)
         self.last_px: dict[str, float] = {}
+
+    @staticmethod
+    def _check_mode(cfg: LiveConfig) -> None:
+        if cfg.mode != "paper" or not cfg.dry_run:
+            raise ValueError("PaperTrader requires mode='paper' and dry_run=true")
+
+    def _make_venue(self, sym: str, start_ms: int):
+        return TapeVenue(start_ms, self.clock_ms)
 
     # ------------------------------------------------------------------ market data
     def on_trade(self, sym, price, qty, ts):
@@ -96,7 +103,7 @@ class PaperTrader:
         for sym in self.cfg.symbols:
             info = self.exch[sym]
             cfg = backtest_config(sym, tick=info["tick"])
-            venue = TapeVenue(start_ms, self.clock_ms)
+            venue = self._make_venue(sym, start_ms)
             hist = prep.history[sym]
             hist = hist[hist.index >= sess.start - pd.Timedelta(days=self.history_days)]
             from crypto_intraday_momentum.signals import decision_minutes
