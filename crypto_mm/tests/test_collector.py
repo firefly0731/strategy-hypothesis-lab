@@ -133,3 +133,10 @@ def test_prune_raw(tmp_path):
     c = Config.load("crypto_mm/collector.toml")
     assert set(c.symbols) == {"ETHUSDC", "SOLUSDC", "XRPUSDC", "ETHUSDT", "SOLUSDT", "XRPUSDT"}
     assert c.retention_days == 7 and c.converted_dir == "./md_npz"
+
+
+def test_market_streams_routed_to_market_endpoint():
+    from crypto_mm.collector import is_market_stream
+    assert is_market_stream("aggTrade") and is_market_stream("kline_1m")
+    assert not is_market_stream("bookTicker") and not is_market_stream("depth@100ms")
+    assert not is_market_stream("trade")

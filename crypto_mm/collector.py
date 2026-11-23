@@ -44,6 +44,8 @@ log = logging.getLogger("collector")
 @dataclass
 class Config:
     out_dir: str = "./md_raw"
+    # Binance split the USD-M streams (2026): aggTrade/kline/markPrice are served only on /market.
+    ws_market_url: str = "wss://fstream.binance.com/market/stream"
     ws_url: str = "wss://fstream.binance.com/stream"
     rest_url: str = "https://fapi.binance.com"
     # symbol -> list of streams (without the "<symbol>@" prefix)
@@ -62,6 +64,7 @@ class Config:
     # if set, a raw day is deleted only when every <symbol>.gz has <converted_dir>/<symbol>_<day>.npz
     converted_dir: str = ""
     min_free_gb: float = 20.0             # log an error when free disk falls below this
+    stop_free_gb: float = 0.0             # shut down cleanly below this free space (0 = never)
 
     @classmethod
     def load(cls, path: str | None) -> "Config":
@@ -114,6 +117,13 @@ class DailyGzipWriter:
         for _, f in self.files.values():
             f.close()
         self.files.clear()
+
+
+MARKET_STREAMS = ("aggTrade", "kline", "markPrice", "continuousKline")
+
+
+def is_market_stream(stream: str) -> bool:
+    return stream.startswith(MARKET_STREAMS)
 
 
 # ----------------------------------------------------------------------------- depth sequence
@@ -199,7 +209,9 @@ class Collector:
                 await self.snapshot_q.put(sym)
             await asyncio.sleep(0.25)                           # stay far below REST weight limits
 
-    def _depth_symbols(self, group: list[str]) -> list[str]:
+    def _depth_symbols(self, group: list[str], market: bool = False) -> list[str]:
+        if market:
+            return []
         return [s for s in group if any(st.startswith("depth") for st in self.cfg.symbols[s])]
 
     async def _periodic_snapshots(self):
@@ -209,9 +221,13 @@ class Collector:
                 if any(x.startswith("depth") for x in st):
                     await self.snapshot_q.put(s)
 
-    async def _run_connection(self, group: list[str]):
-        streams = [f"{s.lower()}@{st}" for s in group for st in self.cfg.symbols[s]]
-        url = f"{self.cfg.ws_url}?streams={'/'.join(streams)}"
+    async def _run_connection(self, group: list[str], market: bool = False):
+        streams = [f"{s.lower()}@{st}" for s in group for st in self.cfg.symbols[s]
+                   if is_market_stream(st) == market]
+        if not streams:
+            return
+        base = self.cfg.ws_market_url if market else self.cfg.ws_url
+        url = f"{base}?streams={'/'.join(streams)}"
         backoff = 1.0
         while not self.stop.is_set():
             try:
@@ -219,7 +235,7 @@ class Collector:
                                               open_timeout=10) as ws:
                     log.info("connected: %d streams", len(streams))
                     backoff = 1.0
-                    for s in self._depth_symbols(group):          # resync books after (re)connect
+                    for s in self._depth_symbols(group, market):          # resync books after (re)connect
                         self.seq.reset(s)
                         await self.snapshot_q.put(s)
                     t_open = time.monotonic()
@@ -294,9 +310,13 @@ class Collector:
                 free = shutil.disk_usage(self.cfg.out_dir).free / 1e9
                 if free < self.cfg.min_free_gb:
                     log.error("LOW DISK: %.1f GB free (< %.1f GB)", free, self.cfg.min_free_gb)
+                if free < self.cfg.stop_free_gb:
+                    log.error("STOP: %.1f GB free (< stop_free_gb %.1f); shutting down", free,
+                              self.cfg.stop_free_gb)
+                    self.stop.set()
             except Exception as e:                              # noqa: BLE001
                 log.warning("housekeeping failed: %r", e)
-            await asyncio.sleep(3600)
+            await asyncio.sleep(300)
 
     async def _flusher(self):
         while not self.stop.is_set():
@@ -325,7 +345,7 @@ class Collector:
             cur.append(s); n += k
         if cur:
             groups.append(cur)
-        tasks = [asyncio.create_task(self._run_connection(g)) for g in groups]
+        tasks = [asyncio.create_task(self._run_connection(g, m)) for g in groups for m in (False, True)]
         tasks += [asyncio.create_task(x) for x in (self._snapshot_worker(), self._flusher(),
                                                    self._stats(), self._periodic_snapshots(),
                                                    self._exchange_info(), self._housekeeping())]
@@ -342,6 +362,7 @@ def main(argv=None):
     ap.add_argument("--config")
     ap.add_argument("--out")
     ap.add_argument("--log-level", default="INFO")
+    ap.add_argument("--max-seconds", type=float, default=0, help="stop cleanly after N seconds")
     a = ap.parse_args(argv)
     logging.basicConfig(level=a.log_level, format="%(asctime)s %(levelname)s %(message)s")
     cfg = Config.load(a.config)
@@ -354,6 +375,8 @@ def main(argv=None):
             loop.add_signal_handler(sig, c.stop.set)
         except NotImplementedError:
             pass
+    if a.max_seconds > 0:
+        loop.call_later(a.max_seconds, c.stop.set)
     loop.run_until_complete(c.run())
 
 

@@ -1,0 +1,21 @@
+# Local (home PC, Korea) recorder for the tick-regime study. Exchange event times (E/T) are the
+# research clock; the local receive time is kept only as a diagnostic. Nothing is ever deleted.
+out_dir = "C:/Users/smile-user/md_local/raw"
+ws_url = "wss://fstream.binance.com/public/stream"
+rest_url = "https://fapi.binance.com"
+snapshot_limit = 1000
+snapshot_every_s = 3600
+reconnect_every_s = 82800
+retention_days = 0
+min_free_gb = 15
+stop_free_gb = 12
+
+[symbols]
+# One-day validation recording: 100 ms order book diffs + aggregated trades. Full bookTicker
+# (about 7 GB/day for three symbols) is left out.
+BTCUSDT = ["depth@100ms", "aggTrade"]
+ETHUSDT = ["depth@100ms", "aggTrade"]
+SOLUSDT = ["depth@100ms", "aggTrade"]
+DOGEUSDT = ["depth@100ms", "aggTrade"]
+ADAUSDT = ["depth@100ms", "aggTrade"]
+TRUMPUSDT = ["depth@100ms", "aggTrade"]
