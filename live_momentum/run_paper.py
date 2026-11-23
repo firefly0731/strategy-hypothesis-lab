@@ -42,6 +42,7 @@ def now_utc() -> pd.Timestamp:
 
 class App:
     FATAL_OPEN: tuple = (AccessRestricted,)   # errors in the session open that stop the process
+    BOOK_STREAM = True                        # bookTicker feed (paper maker-fill simulation only)
 
     def __init__(self, cfg, equity: float):
         self.cfg = cfg
@@ -248,10 +249,11 @@ class App:
         tasks = [
             asyncio.create_task(stream(WS_MARKET, [f"{s}@kline_1m" for s in syms] + [f"{s}@aggTrade" for s in syms],
                                        self.on_market, self.stop, self.on_connect)),
-            asyncio.create_task(stream(WS_PUBLIC, [f"{s}@bookTicker" for s in syms], self.on_public,
-                                       self.stop, self.on_connect)),
             asyncio.create_task(self.clock(exch)),
         ]
+        if self.BOOK_STREAM:
+            tasks.append(asyncio.create_task(stream(WS_PUBLIC, [f"{s}@bookTicker" for s in syms], self.on_public,
+                                                    self.stop, self.on_connect)))
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
         for t in done:
             if t.exception():

@@ -36,6 +36,11 @@ KEEPALIVE_S = 30 * 60
 
 class LiveApp(App):
     FATAL_OPEN = (AccessRestricted, ReconcileError, PermissionError)
+    # The live venue never reads the book (orders are priced off the last trade), and the
+    # bookTicker firehose (thousands of messages/s) only costs event-loop time next to orders.
+    # The stale-data guard then runs on aggTrade alone: fine for BTC/ETH/SOL perps (sub-second
+    # trades) with stale_data_sec=10; review before adding an illiquid symbol or a tighter limit.
+    BOOK_STREAM = False
 
     def __init__(self, cfg, rest: SignedRest):
         super().__init__(cfg, equity=0.0)

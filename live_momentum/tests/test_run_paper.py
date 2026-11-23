@@ -56,3 +56,37 @@ def test_other_errors_in_session_open_retry_with_backoff(tmp_path, monkeypatch):
     asyncio.run(app.open_session(sess, {}))
     assert app.fatal is None and not app.stop.is_set()
     assert app.open_retry_at > 0 and app.open_backoff == 120.0
+
+
+@pytest.mark.parametrize("book", [True, False])
+def test_book_stream_subscription_is_optional(tmp_path, monkeypatch, book):
+    """Paper subscribes bookTicker (maker-fill simulation); live does not (BOOK_STREAM=False)."""
+    from live_momentum import run_live
+    assert run_paper.App.BOOK_STREAM is True and run_live.LiveApp.BOOK_STREAM is False
+    app = run_paper.App(cfg(tmp_path), 10_000.0)
+    app.BOOK_STREAM = book
+    urls = []
+
+    async def fake_stream(url, streams, *a, **k):
+        urls.append((url, tuple(streams)))
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(run_paper, "stream", fake_stream)
+    monkeypatch.setattr(app, "check_exchange", lambda: {})
+    monkeypatch.setattr(app, "clock_offset_ms", lambda: 0.0)
+    monkeypatch.setattr(app, "backfill", lambda start: None)
+
+    class Done(Exception):
+        pass
+
+    async def clock(exch):
+        for _ in range(3):
+            await asyncio.sleep(0)
+        raise Done
+    monkeypatch.setattr(app, "clock", clock)
+    with pytest.raises(Done):
+        asyncio.run(app.run())
+    got = {u for u, _ in urls}
+    assert run_paper.WS_MARKET in got
+    assert (run_paper.WS_PUBLIC in got) is book
+    assert not any("bookTicker" in s for u, ss in urls if u == run_paper.WS_MARKET for s in ss)
