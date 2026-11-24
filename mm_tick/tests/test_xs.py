@@ -12,7 +12,7 @@ def run(trades, rule=2, need=5.0, u_val=0.5, u_on=0.8, liquidate=False):
     side = np.array([x[2] for x in trades], np.int8)
     u = np.full(10_000, u_val, np.float32)
     nd = np.full(5, need)
-    return simulate_x(t, px, side, u, nd, 0, rule, u_on, 0.99, liquidate, 250, 1_800_000, M, TK)
+    return simulate_x(t, px, side, u, nd, 0, rule, u_on, 0.99, liquidate, 250, 1_800_000, M, TK)[:4]
 
 
 # price ~1000 ticks: 1 tick = 10 bp. Market bid 1000, ask 1004 (4 ticks): we improve to 1001 / 1003
@@ -64,3 +64,12 @@ def test_effective_mult_finds_the_coarser_historical_tick():
               np.full(5, 1500)].astype(np.int64)        # day 2: too few trades, keeps day 1
     m = effective_mult(t, k)
     assert (m[:n] == 10).all() and (m[n:2 * n] == 1).all() and (m[2 * n:] == 1).all()
+
+
+def test_side_is_reported_per_trip():
+    t = np.array([1000, 1001, 2000, 3000, 4000, 5000], np.int64)
+    px = np.array([1000, 1004, 1001, 1003, 1003, 1001], float)
+    side = np.array([-1, 1, -1, 1, 1, -1], np.int8)
+    out = simulate_x(t, px, side, np.full(10, 0.5, np.float32), np.full(5, 5.0), 0, 2, 0.8, 0.99, False,
+                     250, 1_800_000, M, TK)
+    assert out[4][0] == 1                      # the first trip was a long (our bid filled first)

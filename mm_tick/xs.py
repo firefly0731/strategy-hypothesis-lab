@@ -119,13 +119,15 @@ def _fills(rule, improved, is_bid, p, q):
 @njit(cache=True)
 def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquidate,
                delay, timeout, maker_bp, taker_bp):
-    """Prices in whole ticks. Returns (entry_ms, pnl_bp_net, by_tp, improved_entry) per trip."""
+    """Prices in whole ticks. Returns (entry_ms, pnl_bp_net, by_tp, improved_entry, side) per trip;
+    side +1 long, -1 short."""
     n = len(t)
     cap = n // 2 + 1
     ent_t = np.empty(cap, dtype=np.int64)
     pnl = np.empty(cap)
     by_tp = np.empty(cap, dtype=np.bool_)
     imp_e = np.empty(cap, dtype=np.bool_)
+    sd_e = np.empty(cap, dtype=np.int8)
     k = 0
     bid_m = np.nan
     ask_m = np.nan
@@ -208,6 +210,7 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
             if closed:
                 ent_t[k] = entry_t
                 imp_e[k] = entry_imp
+                sd_e[k] = pos
                 k += 1
                 pos = 0
         if s < 0:
@@ -250,8 +253,9 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
         by_tp[k] = False
         ent_t[k] = entry_t
         imp_e[k] = entry_imp
+        sd_e[k] = pos
         k += 1
-    return ent_t[:k], pnl[:k], by_tp[:k], imp_e[:k]
+    return ent_t[:k], pnl[:k], by_tp[:k], imp_e[:k], sd_e[:k]
 
 
 MULTS = (1000, 100, 10, 5, 2)
@@ -342,7 +346,7 @@ def build(sym: str) -> None:
                         for lname, lq in LIQUIDATE.items():
                             if R == 5 and (rname != "hybrid" or uo != 0.8 or lname != "hold"):
                                 continue                      # R = 5 only for the primary settings
-                            et, pl, tp, im = simulate_x(ts, ps, ss, us[R], need, start_ms, r, uo, EXIT_U, lq,
+                            et, pl, tp, im, _ = simulate_x(ts, ps, ss, us[R], need, start_ms, r, uo, EXIT_U, lq,
                                                         DELAY_MS, TIMEOUT_MS, MAKER_BP, TAKER_BP)
                             rows.append(pd.DataFrame({"R": R, "rule": rname, "u_on": uo, "exit": lname, "t": et,
                                                       "pnl_bp": pl.astype(np.float32), "by_tp": tp, "improved": im,

@@ -59,7 +59,7 @@ def trips_for(sym: str) -> pd.DataFrame | None:
         cuts = np.flatnonzero(np.diff(mult)) + 1
         for a, b in zip(np.r_[0, cuts], np.r_[cuts, len(t)]):
             m = float(mult[a])
-            et, pl, tp, im = xs.simulate_x(t[a:b], np.rint(px[a:b] / m), side[a:b], u, need, start_ms,
+            et, pl, tp, im, _ = xs.simulate_x(t[a:b], np.rint(px[a:b] / m), side[a:b], u, need, start_ms,
                                            xs.RULES["hybrid"], 0.8, xs.EXIT_U, False,
                                            xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP)
             out.append(pd.DataFrame({"t": et, "pnl_bp": pl.astype(np.float32), "by_tp": tp}))
