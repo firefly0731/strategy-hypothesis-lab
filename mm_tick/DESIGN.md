@@ -194,7 +194,7 @@ leaves the band. This replaces the one-tick take-profit above; everything else s
   on a band exit is compared with holding, by mean PnL and by the 1st percentile of trip PnL.
 Variants: 2 fill rules × 3 u_on × 3 exit_u × 11 symbols.
 
-## Stage X: cross-sectional, monitored maker (2026-24-11, universe fixed before any download)
+## Stage X: cross-sectional, monitored maker (2026-11-24, universe fixed before any download)
 User idea: pick, every day, only the coins where a maker earns the spread net of fees and
 slippage inside the strong-reversion zone of a short conditional band; leave a coin as soon as
 the opportunity fades (band break, or the monitored edge turning negative).
@@ -206,3 +206,39 @@ exceed 1 GB are left out for the disk budget (AKE, H, Q, VELVET, SKYAI, BANK, LA
 Data: 2026-04 (warm-up) .. 2026-10. Known bias: the snapshot keeps only coins still listed and
 liquid today (survivorship). The strategy rules and criteria are written before any simulation,
 in the next section.
+
+### Stage X rules and criteria (written while the data downloads, before any simulation)
+Fees (Binance USDT-M, regular tier): maker 2 bp, taker 5 bp.
+
+Per symbol, a maker simulated on trades (the stage S machinery, with these changes):
+- **Band (shorter than the momentum band):** anchored R = 15 min (primary, the stage R cell) and
+  R = 5 min, hour-of-day baseline over 14 days. Quote only while u < 0.8 (the strong-reversion
+  zone of stage R). Variant u_on = 1.0 (no switch) for comparison.
+- **Band break:** u ≥ 0.99 cancels resting quotes. In a position: hold (primary, stage S
+  showed it has the better mean) or liquidate by taker (variant).
+- **Spread condition:** need = 2 × maker fee + AS, where AS is the symbol's mean 10-second
+  markout against the maker side, over the previous 7 days (from trades: aggressor side ×
+  price change 10 s after the trade). Quote only if the spread we would capture is ≥ need.
+- **Quotes:** if the market spread is ≥ 3 ticks, improve each side by one tick (we are then the
+  only order at that price); otherwise join the touch. Captured spread = our ask − our bid.
+- **Fill rule (primary, "hybrid"):** a quote that improved the touch fills on any taker trade at
+  its price (we are alone there); a quote that joined the touch fills only on a trade through it
+  (back of the queue). The all-touch and all-through rules are reported as bounds.
+- **After a fill:** a take-profit at max(entry + need, opposite touch − 1 tick) on the long side
+  (mirror for short), same hybrid rule; taker exit after 30 minutes. One unit per symbol.
+- 250 ms reaction delay on every quote change, as in stage S.
+
+**Monitoring (selection):** each UTC day d, a symbol is active if its simulated mean net PnL per
+round trip over days d−7..d−1 is > 0 with at least 20 round trips. Only active symbols count on
+day d. Every input is from before day d.
+
+Comparisons: all symbols every day (no selection); random selection with the same number of
+symbols each day (200 draws); selection by the spread condition alone.
+Halves: design 2026-05..07, confirm 2026-08..10.
+
+Criteria (primary: R = 15, u_on = 0.8, hold, hybrid rule):
+- **X1:** the selected book's mean net PnL per round trip is > 0 with the day-block CI excluding 0
+  in both halves, and above the p95 of the random selections.
+- **X2 (descriptive):** u_on = 0.8 against 1.0, R = 5 against 15, and hold against liquidate, inside
+  the selected book.
+- Capacity is reported: round trips per day and notional per day at the minimum order size.
