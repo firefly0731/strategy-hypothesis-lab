@@ -263,3 +263,14 @@ CI spans 0). A longer, earlier sample is the test the main result cannot give.
   (1.0–1.4 GB each) and the disk ran short at 2025-12. The user chose to shorten the extension
   instead of deleting more data: warm-up 2025-04, simulated 2025-05-08 .. 2025-11-30; halves
   2025-05..07 and 2025-08..11. The gap 2025-12 .. 2026-04 stays untested. X3 is unchanged.
+
+### Bug fix before the re-run (2026-11-24): the tick in force, not today's tick
+Binance cut the tick size by 10x or 100x on many of these coins during 2025–2026 (GTC 100x until
+2026-04; ZIL, HOT, KAVA 10x until 2026-06; W until 2026-08; IDOL through 2026-10; 30 of 77 coins in
+all; table `results/eff_tick_by_day.csv`). The tick-grid check caught only ticks *finer* than
+today's, so on these days the simulator quoted "one tick inside" a spread that was a single real
+tick: prices nobody could quote. Results in `xs/` and `xs_early/` are invalid for those coins.
+Fix: per UTC day, the tick in force is the largest m in (1000, 100, 10, 5, 2) × today's tick with
+≥ 99% of that day's trade prices on its grid (days under 200 trades keep the previous value);
+each run of days is simulated in units of that tick. Everything else, including X1 and X3, is
+unchanged. Both periods are re-run into `xs_v2/` and `xs_early_v2/`.

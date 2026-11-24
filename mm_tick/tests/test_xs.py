@@ -51,3 +51,16 @@ def test_timeout_exit_pays_maker_and_taker():
     et, pnl, tp, im = run(tr)
     assert not tp[0]
     assert pnl[0] == pytest.approx((999 - 1001) / 1001 * 1e4 - M - TK)
+
+
+def test_effective_mult_finds_the_coarser_historical_tick():
+    from mm_tick.xs import effective_mult
+    day = 86_400_000
+    n = 500
+    t = np.r_[np.arange(n), day + np.arange(n), 2 * day + np.arange(5)].astype(np.int64)
+    rng = np.random.default_rng(0)
+    k = np.r_[rng.integers(100, 200, n) * 10,          # day 0: every price on the 10-tick grid
+              rng.integers(1000, 2000, n),              # day 1: today's tick
+              np.full(5, 1500)].astype(np.int64)        # day 2: too few trades, keeps day 1
+    m = effective_mult(t, k)
+    assert (m[:n] == 10).all() and (m[n:2 * n] == 1).all() and (m[2 * n:] == 1).all()

@@ -24,8 +24,10 @@ from .run import RES, block_ci, ticks
 # Each period: (first month = warm-up only, last month, split month between the two halves, labels).
 # "main" is the pre-registered test; "early" is the extension that covers the 12 months before it.
 PERIODS = {
-    "main": ("2026-04", "2026-10", "2026-08", ("design", "confirm"), "xs"),
-    "early": ("2025-04", "2025-11", "2025-08", ("early_a", "early_b"), "xs_early"),   # cut for disk
+    # v2 folders: runs with the effective (historical) tick; the first runs in xs/ and xs_early/
+    # used today's tick and are kept only as the record of that bug
+    "main": ("2026-04", "2026-10", "2026-08", ("design", "confirm"), "xs_v2"),
+    "early": ("2025-04", "2025-11", "2025-08", ("early_a", "early_b"), "xs_early_v2"),   # cut for disk
 }
 PERIOD = "main"
 MONTHS: list[str] = []
@@ -250,6 +252,31 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
     return ent_t[:k], pnl[:k], by_tp[:k], imp_e[:k]
 
 
+MULTS = (1000, 100, 10, 5, 2)
+MULT_MIN_TRADES = 200
+
+
+def effective_mult(t: np.ndarray, k: np.ndarray) -> np.ndarray:
+    """Per trade: the multiple of today's tick in force that UTC day, i.e. the largest m in MULTS
+    with >= 99% of the day's prices (k, in today's ticks) on the m grid. A day with fewer than
+    MULT_MIN_TRADES trades takes the previous day's value."""
+    day = t // 86_400_000
+    edges = np.flatnonzero(np.r_[True, day[1:] != day[:-1], True])
+    out = np.ones(len(t), dtype=np.int64)
+    prev = 1
+    for a, b in zip(edges[:-1], edges[1:]):
+        m = prev
+        if b - a >= MULT_MIN_TRADES:
+            m = 1
+            for c in MULTS:
+                if np.mean(k[a:b] % c == 0) >= 0.99:
+                    m = c
+                    break
+        out[a:b] = m
+        prev = m
+    return out
+
+
 def need_by_day(sym: str, tick: float) -> np.ndarray:
     """need[d] = 2 x maker + max(0, mean 10 s markout over days d-7..d-1)."""
     n_days = n_seconds() // E.DAY_S
@@ -300,17 +327,25 @@ def build(sym: str) -> None:
             continue
         side = np.where(tb.column("buyer_maker").to_numpy(), -1, 1).astype(np.int8)
         del tb
-        for R in RS:
-            for rname, r in RULES.items():
-                for uo in U_ON:
-                    for lname, lq in LIQUIDATE.items():
-                        if R == 5 and (rname != "hybrid" or uo != 0.8 or lname != "hold"):
-                            continue                      # R = 5 only for the primary settings
-                        et, pl, tp, im = simulate_x(t, px, side, us[R], need, start_ms, r, uo, EXIT_U, lq,
-                                                    DELAY_MS, TIMEOUT_MS, MAKER_BP, TAKER_BP)
-                        rows.append(pd.DataFrame({"R": R, "rule": rname, "u_on": uo, "exit": lname, "t": et,
-                                                  "pnl_bp": pl.astype(np.float32), "by_tp": tp, "improved": im}))
-        del t, px, side
+        # the exchange tick was coarser in the past for many coins: simulate each run of days in
+        # units of the tick actually in force (trades show it), not today's tick
+        mult = effective_mult(t, px.astype(np.int64))
+        cuts = np.flatnonzero(np.diff(mult)) + 1
+        for a, b in zip(np.r_[0, cuts], np.r_[cuts, len(t)]):
+            m = float(mult[a])
+            ts, ps, ss = t[a:b], np.rint(px[a:b] / m), side[a:b]
+            for R in RS:
+                for rname, r in RULES.items():
+                    for uo in U_ON:
+                        for lname, lq in LIQUIDATE.items():
+                            if R == 5 and (rname != "hybrid" or uo != 0.8 or lname != "hold"):
+                                continue                      # R = 5 only for the primary settings
+                            et, pl, tp, im = simulate_x(ts, ps, ss, us[R], need, start_ms, r, uo, EXIT_U, lq,
+                                                        DELAY_MS, TIMEOUT_MS, MAKER_BP, TAKER_BP)
+                            rows.append(pd.DataFrame({"R": R, "rule": rname, "u_on": uo, "exit": lname, "t": et,
+                                                      "pnl_bp": pl.astype(np.float32), "by_tp": tp, "improved": im,
+                                                      "mult": np.int16(m)}))
+        del t, px, side, mult
         gc.collect()
     if not rows:
         log.warning("%s: no usable month", sym)
@@ -323,6 +358,7 @@ def build(sym: str) -> None:
     agg["n_tp"] = g["by_tp"].sum().to_numpy()
     agg["n_improved"] = g["improved"].sum().to_numpy()
     agg["p01"] = g["pnl_bp"].quantile(0.01).to_numpy()
+    agg["mult"] = g["mult"].max().to_numpy()
     agg["skipped_months"] = ",".join(skipped)
     agg.to_parquet(p)
     log.info("%s: %d trips (all variants), %d skipped months", sym, len(df), len(skipped))

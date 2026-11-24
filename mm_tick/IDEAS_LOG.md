@@ -78,3 +78,9 @@ Reading
   inferred from trades can be stale.
 - Next checks before any money: record the order books of the selected coins (IDOL, TA, W, ZIL,
   HOT, KAVA) for a day or two, and replay the queue; then a minimum-size live test.
+
+**Correction (2026-11-24): #17–#20 are invalid.** The simulator used today's tick on days when
+the exchange tick was 10–100x coarser (ZIL, HOT, KAVA, W, IDOL among them), which created
+impossible inside-the-spread quotes. Found when the 2025 extension gave +14 bp per trip, 64% of
+it from GTC (tick 100x today's then). See DESIGN.md, "Bug fix before the re-run"; re-run results
+follow.
