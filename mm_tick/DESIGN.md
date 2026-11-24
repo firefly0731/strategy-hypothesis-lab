@@ -104,3 +104,36 @@ before the anchored results were computed.
   large-tick group is reported in the same way. Random-time controls are matched on the hour
   and on τ.
 - Variants added: 2 R × 5 q × 4 h × 6 d = 240 cells per group.
+
+## Stage R: where does a maker fill revert? (2026-11-24, before any stage R result)
+User question: can past data locate the band zone where mean reversion is most likely? For a grid
+the relevant event is a first passage: after a fill, does the price move δ back toward the anchor
+before it moves δ further away?
+
+- **Coordinates:** the anchored band of stage A-anchored (R ∈ {5, 15} min). u is the position of
+  |z| in its own distribution over the previous 14 days (the same histogram as k_q). The u bins
+  are [0, .5), [.5, .8), [.8, .9), [.9, .95), [.95, .99) and [.99, 1].
+- **Fill samples:** every 10th second (τ ≥ 10 s), and only when the last trade of that second
+  was an aggressor pushing away from the anchor: a taker buy when y > 0, a taker sell when y < 0.
+  That trade is the one that would hit a resting grid order on that side. Fill price p = that
+  second's last trade. Position: short if y > 0, long if y < 0.
+- **Outcome:** scan the following seconds using each second's trade high and low, for up to
+  15 minutes. Reversion = a trade at p(1 ∓ δ) toward the anchor; adverse = a trade at p(1 ± δ)
+  away from it. If both happen in the same second, it counts as adverse (conservative). Timeout:
+  mark to market at 15 minutes. Value per fill (bp): +δ, −δ, or the mark to market.
+- **δ ∈ {5, 10, 20} bp.** Cells where δ is less than 2 ticks are skipped, because bid-ask bounce
+  would otherwise look like reversion.
+- **Fees:** the value is reported gross (USDC-M maker 0 bp is the premise) and also net of 2 bp
+  (USDT-M maker fee) for reference.
+- **Secondary split (descriptive):** the sign of the 60 s taker flow relative to y (pushing away
+  vs back toward the anchor).
+
+Criteria (gross value; the CI is the day-block bootstrap as before):
+- **R1, discovery:** for some (R, δ, u-bin), P(reversion) > 0.5 and the mean value is > 0 with the
+  95% CI excluding 0. There are 2 R × 3 δ × 6 bins = 36 cells; the best cell is recorded with that
+  count.
+- **R2, hold-out:** the best discovery cell, unchanged, has a mean value > 0 on BNB/XRP/DOGE.
+- The large-tick group is reported the same way. A one-day check on the order book recording
+  compares trade-price and mid-price reversion rates for the bounce effect.
+- This is still optimistic: queue position is ignored, so a real order fills less often when the
+  price only touches it, and more often when the price goes through it.
