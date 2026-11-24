@@ -312,3 +312,22 @@ the band edge (hold through small breaks).
 closed units). **G1:** all-symbol book mean net PnL per closed unit, and **G2:** the selected
 book, each > 0 with the day-block CI above 0 in every half and, for G2, above the random-book
 p95. Also reported: by symbol, exit mix (maker / break / month end), inventory reached.
+
+## Stage C: ceiling for a fill-toxicity predictor (2026-11-24, before any run)
+Question: how good must a predictor of "this round trip will lose" be before the maker turns
+positive? If even a strong predictor does not suffice, a Bayesian model of the conditional
+probability (or any model) is not worth building on these fees.
+
+- **Trips:** stage X primary settings, tick in force (R = 15, u_on 0.8, hold, hybrid), 75
+  symbols, 2026-05-08 .. 2026-10-31; every round trip with its net PnL (mean −9.4 bp).
+- **Synthetic predictor of a given quality:** label y = 1 if the trip loses (net PnL < 0). Score
+  = y·μ + N(0, 1) with μ = √2·Φ⁻¹(AUC), so the score has exactly that AUC for y. AUC ∈ {0.55,
+  0.60, 0.65, 0.70, 0.75, 0.80, 0.90}; 20 noise draws each. A second version ranks by the
+  PnL itself with rank correlation (IC) ∈ {0.05, 0.10, 0.15, 0.20, 0.30}.
+- **Decision:** keep only trips whose score is in the best fraction f of the design half
+  (2026-05..07), f chosen on the design half from {0.1, 0.2, ..., 1.0}; apply the same score
+  threshold in the confirm half (2026-08..10). Report the kept fraction and mean net PnL.
+- **Reading:** the lowest AUC (and IC) at which the confirm-half mean is > 0. A predictor at
+  AUC ≤ 0.60 is realistic for second-scale features in the literature; ≥ 0.75 is not.
+- **Simplification (optimistic):** skipping a trip does not change later trips (in reality the
+  quote would rest and fill at another time), and the predictor costs nothing in latency.
