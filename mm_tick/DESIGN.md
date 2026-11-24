@@ -387,3 +387,36 @@ not rank by money. Stage E predicts the net PnL itself.
   prediction with the PnL, by month; the same for the secondary model; and, descriptively, the
   best kept fraction in {0.01, 0.02, 0.05, 0.1, 0.2} chosen on 2026-07 (May–Jun fit) applied to
   the test half. If E1 fails the result stands; no tuning on the test half.
+
+## Stage H: when to cut a held position, a conditional model of the continuation value (2026-11-24, before any run)
+Stage X primary trips win +2.9 bp 87% of the time and lose −90 bp 13% of the time; the losses
+build while the position is held (exit only at take-profit or by taker after 30 min). Stages P
+and E filtered entries. Stage H keeps the entries and decides, while the position is open,
+whether to cut now by taker or keep the original exit.
+
+- **Trips:** stage X primary settings, tick in force, 2026 period (the stage P trips),
+  re-simulated with their exit time, entry price and take-profit price.
+- **Checkpoints:** c ∈ {5, 10, 20, 30, 60, 120, 300, 600, 900, 1200, 1500} s after the entry
+  fill, while the trip is still open at entry + c. Decision time τ = entry + c, information:
+  trades strictly before τ. A cut executes by taker 250 ms later at the estimated touch of that
+  moment (long: min(last taker sell, last taker buy − 1 tick); short: the mirror), net of maker
+  entry + taker exit fees. If the trip closes on its own before the cut executes, it keeps its
+  own outcome.
+- **Target per checkpoint row:** A = (final PnL if held as before) − (PnL if cut now), bp.
+- **Features:** the stage P market features at τ (returns, flow imbalance, activity, path
+  length, last size, time since last trade, spread, u, d·z, tick in bp, hour), signed by the
+  side, plus the trip state: unrealised PnL at the estimated mid, distance to the take-profit
+  (bp), need, whether the entry improved the touch.
+- **Model:** one Bayesian additive linear model per checkpoint (one-hot deciles with a NaN
+  bin, Gaussian prior = ridge), so every effect may differ with the time held. Prior ratio
+  λ ∈ {1, 10, 100, 1e3, 1e4, 1e5} per checkpoint by 2026-07 MSE with a 2026-05..06 fit; refit on
+  2026-05..07.
+- **Policy (fixed now):** cut at the first checkpoint whose predicted A < 0; otherwise the
+  original exit. Evaluated on 2026-08..10 trip by trip with the realised outcomes.
+- **H1 (pass):** test mean PnL per trip > 0 and day-block bootstrap 95% lower bound > 0. If H1
+  passes: the 2025 trips, then a re-simulation where the cut acts inside the simulator (a cut
+  frees the position earlier, which changes later trips; the trip-level check here does not).
+- **Always reported:** the improvement over holding (paired by day, with its CI); the share of
+  trips cut and when; the hindsight ceiling (best of holding and cutting at any checkpoint, per
+  trip); the policy's PnL by month.
+- **Simplification:** taker fills at the estimated touch for any size (minimum size assumed).

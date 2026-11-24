@@ -121,6 +121,15 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
                delay, timeout, maker_bp, taker_bp):
     """Prices in whole ticks. Returns (entry_ms, pnl_bp_net, by_tp, improved_entry, side) per trip;
     side +1 long, -1 short."""
+    r = simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquidate,
+                        delay, timeout, maker_bp, taker_bp)
+    return r[0], r[1], r[2], r[3], r[4]
+
+
+@njit(cache=True)
+def simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquidate,
+                    delay, timeout, maker_bp, taker_bp):
+    """simulate_x plus (exit_ms, entry_px, tp_px) per trip, prices in ticks."""
     n = len(t)
     cap = n // 2 + 1
     ent_t = np.empty(cap, dtype=np.int64)
@@ -128,6 +137,9 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
     by_tp = np.empty(cap, dtype=np.bool_)
     imp_e = np.empty(cap, dtype=np.bool_)
     sd_e = np.empty(cap, dtype=np.int8)
+    ex_e = np.empty(cap, dtype=np.int64)
+    en_e = np.empty(cap)
+    tp_e = np.empty(cap)
     k = 0
     bid_m = np.nan
     ask_m = np.nan
@@ -211,6 +223,9 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
                 ent_t[k] = entry_t
                 imp_e[k] = entry_imp
                 sd_e[k] = pos
+                ex_e[k] = ti
+                en_e[k] = entry
+                tp_e[k] = tp
                 k += 1
                 pos = 0
         if s < 0:
@@ -254,8 +269,11 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
         ent_t[k] = entry_t
         imp_e[k] = entry_imp
         sd_e[k] = pos
+        ex_e[k] = t[n - 1]
+        en_e[k] = entry
+        tp_e[k] = tp
         k += 1
-    return ent_t[:k], pnl[:k], by_tp[:k], imp_e[:k], sd_e[:k]
+    return ent_t[:k], pnl[:k], by_tp[:k], imp_e[:k], sd_e[:k], ex_e[:k], en_e[:k], tp_e[:k]
 
 
 MULTS = (1000, 100, 10, 5, 2)
