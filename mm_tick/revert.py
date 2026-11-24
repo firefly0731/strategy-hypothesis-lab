@@ -132,29 +132,49 @@ def samples(az: dict, side: np.ndarray, net60: np.ndarray, cdf: np.ndarray) -> p
                          "flow_away": np.sign(net60[i]) == sy})
 
 
+CHUNKS = [MONTHS[i:i + 3] for i in range(1, len(MONTHS), 3)]   # each with the previous month as warm-up
+
+
 def build(sym: str) -> None:
+    """Chunked by 3 target months plus 1 warm-up month, to bound memory. Baselines need 28 days
+    of history (14 for the scale, 14 for the quantiles), which the warm-up month covers, so every
+    sample sees the same history as in a single pass. Lost: the first chunk's warm-up month and
+    the last 15 minutes of each chunk (no complete first-passage window)."""
     tick = ticks()[sym]
-    g = grid_hl(sym, MONTHS)
-    cs = np.cumsum(g.pop("net").astype(np.float64))
-    net60 = np.r_[np.full(60, np.nan), cs[60:] - cs[:-60]].astype(np.float32)
-    del cs
     for R in RS_MIN:
         p = RES / f"rev_{sym}_R{R}.parquet"
         if p.exists():
             continue
-        az = anchored_z(g["px"], R)
-        cdf = cdf_by_day(az["z"], az["n_days"])
-        s = samples(az, g["side"], net60, cdf)
-        del az, cdf
-        gc.collect()
-        idx = s["i"].to_numpy()
-        for d in DELTAS_BP:
-            s[f"v{d}"] = first_passage(idx, s["pos"].to_numpy(), g["px"], g["hi"], g["lo"], float(d), HMAX_S)
-        s["day"] = idx // E.DAY_S
-        s["tick_bp"] = tick / g["px"][idx] * 1e4
-        s.to_parquet(p)
-        log.info("%s R=%d: %d samples", sym, R, len(s))
-        gc.collect()
+        parts = []
+        for target in CHUNKS:
+            warm = MONTHS[MONTHS.index(target[0]) - 1]
+            months = [warm] + target
+            g = grid_hl(sym, months)
+            day0 = int((pd.Timestamp(months[0] + "-01", tz="UTC")
+                        - pd.Timestamp(MONTHS[0] + "-01", tz="UTC")).days)
+            warm_s = int((pd.Timestamp(target[0] + "-01", tz="UTC")
+                          - pd.Timestamp(warm + "-01", tz="UTC")).total_seconds())
+            cs = np.cumsum(g.pop("net").astype(np.float64))
+            net60 = np.r_[np.full(60, np.nan), cs[60:] - cs[:-60]].astype(np.float32)
+            del cs
+            az = anchored_z(g["px"], R)
+            cdf = cdf_by_day(az["z"], az["n_days"])
+            sm = samples(az, g["side"], net60, cdf)
+            del az, cdf, net60
+            gc.collect()
+            sm = sm[sm["i"] >= warm_s].reset_index(drop=True)
+            idx = sm["i"].to_numpy()
+            for d in DELTAS_BP:
+                sm[f"v{d}"] = first_passage(idx, sm["pos"].to_numpy(), g["px"], g["hi"], g["lo"],
+                                            float(d), HMAX_S)
+            sm["day"] = idx // E.DAY_S + day0
+            sm["tick_bp"] = tick / g["px"][idx] * 1e4
+            sm["i"] = idx + day0 * E.DAY_S
+            parts.append(sm)
+            del g
+            gc.collect()
+            log.info("%s R=%d %s..%s: %d samples", sym, R, target[0], target[-1], len(sm))
+        pd.concat(parts, ignore_index=True).to_parquet(p)
 
 
 def summary(group: str) -> pd.DataFrame:
