@@ -360,3 +360,30 @@ on the last design month (2026-07) with the model fit on 2026-05..06; then refit
 check of stage C with the real scores (kept fraction chosen on the design half) and, only then,
 a second test on 2025 trips. Reported always: AUC by month and by symbol group, calibration, the
 top features. If AUC < 0.75 the model is reported as it is and not tuned further on the test.
+
+## Stage E: a Bayesian model of expected round-trip PnL (2026-11-24, before any run)
+Stage P found that the loss probability is predictable (test AUC 0.68) but that the trips with
+rare losses lose the most when they do (−386 bp in the safest decile), so a loss classifier does
+not rank by money. Stage E predicts the net PnL itself.
+
+- **Trips and features:** the stage P table unchanged (`results/toxic_features.parquet`, the same
+  27 features, the same decile bins with a NaN bin, the same information set).
+- **Primary model:** E[pnl | x] as an additive Bayesian linear model: pnl = b0 + Σ w_bin + ε,
+  ε ~ N(0, σ²), w ~ N(0, τ²), flat b0. The posterior mean is the ridge solution
+  (X'X + σ²/τ² I)⁻¹X'y, X'X built from the bin contingency tables. Squared loss is kept on
+  purpose: the conditional mean is the quantity that decides money, tails included.
+- **Secondary model (reported, not used for the verdict):** two-part, E = (1 − p)·W + p·L, with
+  p from the stage P logistic model and W, L the same linear model fit on winning and losing
+  trips separately.
+- **Choices, all on the design half:** fit on 2026-05..06, validate on 2026-07: the prior ratio
+  λ = σ²/τ² ∈ {1, 10, 100, 1e3, 1e4, 1e5} by validation MSE; then refit on 2026-05..07.
+- **Test:** 2026-08..10, never used for any choice.
+- **E1 (decision rule fixed now):** quote a trip only when the predicted PnL > 0. Pass if, on the
+  test half, the kept trips number ≥ 2,000, their mean net PnL is > 0, and the day-block bootstrap
+  95% lower bound (2,000 draws over test days) is > 0. If E1 passes: a second test on the 2025
+  trips, and a re-simulation where the filter acts inside the simulator (a skipped trip lets the
+  quote rest; the trip-level check here treats later trips as unchanged, which is optimistic).
+- **Always reported:** test PnL by decile of the prediction, the rank correlation (IC) of the
+  prediction with the PnL, by month; the same for the secondary model; and, descriptively, the
+  best kept fraction in {0.01, 0.02, 0.05, 0.1, 0.2} chosen on 2026-07 (May–Jun fit) applied to
+  the test half. If E1 fails the result stands; no tuning on the test half.
