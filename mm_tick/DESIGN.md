@@ -146,3 +146,50 @@ readings are now fixed for R2, and nothing else changes:
 - **Secondary cell (highest value, P_rev > P_adv):** R = 15, δ = 20 bp, u in [0.5, 0.8):
   +0.418 bp (CI 0.299..0.555), P_rev 0.293 vs P_adv 0.284.
 R2 passes if the primary cell has a mean value > 0 on BNB/XRP/DOGE. The secondary cell is reported.
+
+## Stage S: one-tick scalper with a band switch, from trades only (2026-11-24, before any result)
+User idea: a tick scalper (bid and ask at the touch, take one tick) that quotes only while the
+price is inside the conditional band. There is no order book data, so the queue position is
+bracketed by two fill rules, and the result is read as a range.
+
+- **Symbols:** those where one tick is worth taking: ADA, NEAR, WLD, TRUMP, FET (large tick) and
+  SOL, XRP, DOGE (1.0–1.7 bp). BTC, ETH and BNB are excluded (one tick < 0.2 bp).
+- **Quotes from trades:** the bid is the last taker-sell price and the ask is the last taker-buy
+  price; if the ask is not above the bid, the ask is bid + 1 tick. A quote change takes effect
+  250 ms after the trade that caused it (reaction delay). Until then the old quote rests, so it can
+  be picked off.
+- **States:** FLAT: rest a bid at the bid and an ask at the ask. On a fill, cancel the other side.
+  LONG (SHORT): rest a take-profit one tick above (below) the entry. Exit by a taker order at
+  the touch after 300 s if the take-profit has not filled.
+- **Fill rules:** touch (optimistic, front of the queue): a taker trade at the quote price or
+  better. Through (pessimistic, back of the queue): a taker trade strictly beyond the quote price.
+  The fill price is the quote price either way.
+- **Band switch** (anchored band R = 15 min, u as in stage R): new entries only while
+  u < u_on, u_on ∈ {1.0 (no switch), 0.95, 0.8}. Open positions are managed the same way in
+  every variant.
+- **Fees:** maker 0 bp (USDC-M premise); the taker exit pays 4 bp. One unit at a time.
+- **Output:** per round trip, PnL in bp; round trips per day; the share closed by the take-profit.
+- **Split by time:** design half 2025-12 .. 2026-05, confirm half 2026-06 .. 2026-10.
+
+Criteria:
+- **S1:** under the through rule (pessimistic), the mean PnL per round trip is > 0 with the
+  day-block CI excluding 0, pooled over the symbols, in both halves, for at least one u_on.
+- **S2:** the band switch helps: under both fill rules, u_on = 0.8 or 0.95 has a higher mean than
+  u_on = 1.0 in both halves.
+- If S1 fails under the through rule but the touch rule is positive, queue position decides, and
+  the order book recording is needed before any decision.
+Variants: 2 fill rules × 3 u_on × 8 symbols.
+
+### Stage S amended to the user's specification (2026-11-24, before any stage S result)
+The user specified the strategy: buy and sell with a 20 bp spread, quote only inside the
+strong-reversion zone of the hourly conditional band, and cancel and liquidate when the price
+leaves the band. This replaces the one-tick take-profit above; everything else stays.
+- **Take-profit:** 20 bp from the entry, rounded to whole ticks (at least 1 tick).
+- **Band exit while in a position:** liquidate by a taker order when u ≥ exit_u,
+  exit_u ∈ {0.95, 0.99, never}. "Never" holds until the take-profit or the timeout.
+- **Timeout:** 30 minutes, then a taker exit.
+- **Entry switch:** u_on ∈ {1.0, 0.95, 0.8} as before.
+- **Symbols:** all 11 (a 20 bp spread is meaningful on the majors too).
+- **Criteria:** S1 and S2 as above, for any (u_on, exit_u). Added S3 (descriptive): liquidating
+  on a band exit is compared with holding, by mean PnL and by the 1st percentile of trip PnL.
+Variants: 2 fill rules × 3 u_on × 3 exit_u × 11 symbols.
