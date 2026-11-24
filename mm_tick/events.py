@@ -46,7 +46,7 @@ def load_trades(sym: str, month: str, cols=("t", "px", "qty", "buyer_maker"), un
 
 # ----------------------------------------------------------------------------- pass 1
 
-def second_grid(sym: str, months: list[str]) -> dict:
+def second_grid(sym: str, months: list[str], allow_missing: bool = False) -> dict:
     """Return arrays on the 1-second grid T_i = start + (i+1)*1000 ms (end of second i)."""
     first = pd.Timestamp(months[0] + "-01", tz="UTC")
     y, m = map(int, months[-1].split("-"))
@@ -59,6 +59,8 @@ def second_grid(sym: str, months: list[str]) -> dict:
     cnt = np.zeros(n, dtype=np.int32)
     carry = np.nan
     for mo in months:
+      if allow_missing and not trade_path(sym, mo).exists():
+          continue                          # not listed that month: no trades, price stays NaN
       for batch in pq.ParquetFile(trade_path(sym, mo)).iter_batches(batch_size=4_000_000):
         df = batch.to_pandas()
         t = df["t"].to_numpy()

@@ -242,3 +242,20 @@ Criteria (primary: R = 15, u_on = 0.8, hold, hybrid rule):
 - **X2 (descriptive):** u_on = 0.8 against 1.0, R = 5 against 15, and hold against liquidate, inside
   the selected book.
 - Capacity is reported: round trips per day and notional per day at the minimum order size.
+
+### Stage X extension: the 12 months before (written 2026-11-24, before any download or simulation)
+Reason: the main test rests on a few coins per half (confirm: IDOL 78% of PnL; without IDOL the
+CI spans 0). A longer, earlier sample is the test the main result cannot give.
+
+- **Data:** the same 77-symbol universe (no re-selection), aggTrades 2025-04 (warm-up) .. 2026-04.
+  Simulated days 2025-05-08 .. 2026-04-30; with the main period this covers 2025-05 .. 2026-10.
+  A symbol enters in its first listed month (that month is its warm-up; the band and the spread
+  condition need 14 and 7 earlier days, so it cannot quote before). Months off today's tick grid
+  are skipped as before.
+- **Rules:** unchanged: the same code, the same primary settings and variants, no tuning.
+- **Criterion X3 (primary settings):** over the whole extension, the selected book's mean net PnL
+  per round trip is > 0, its day-block CI excludes 0, and it is above the p95 of the random books.
+  Also reported, not part of the criterion: the two halves (2025-05..10, 2025-11..2026-04), the
+  PnL share of the top symbols, and the result with the top one and top two symbols removed.
+- **Known biases, larger here:** the universe is a 2026-11 snapshot (coins still listed and liquid
+  now), so survivorship is worse further back; the tick size is today's.

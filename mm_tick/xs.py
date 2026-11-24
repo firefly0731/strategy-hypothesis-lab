@@ -21,9 +21,31 @@ from .fetch_aggtrades import months_between
 from .revert import cdf_by_day
 from .run import RES, block_ci, ticks
 
-MONTHS = months_between("2026-04", "2026-10")          # 2026-04 is warm-up only
-SIM_MONTHS = MONTHS[1:]
-START = pd.Timestamp(MONTHS[0] + "-01", tz="UTC")
+# Each period: (first month = warm-up only, last month, split month between the two halves, labels).
+# "main" is the pre-registered test; "early" is the extension that covers the 12 months before it.
+PERIODS = {
+    "main": ("2026-04", "2026-10", "2026-08", ("design", "confirm"), "xs"),
+    "early": ("2025-04", "2026-04", "2025-11", ("early_a", "early_b"), "xs_early"),
+}
+PERIOD = "main"
+MONTHS: list[str] = []
+SIM_MONTHS: list[str] = []
+START = None
+DESIGN_END = ""
+HALVES: tuple = ()
+OUT = None
+
+
+def set_period(name: str) -> None:
+    global PERIOD, MONTHS, SIM_MONTHS, START, DESIGN_END, HALVES, OUT
+    first, last, split, halves, sub = PERIODS[name]
+    PERIOD = name
+    MONTHS = months_between(first, last)
+    SIM_MONTHS = MONTHS[1:]
+    START = pd.Timestamp(MONTHS[0] + "-01", tz="UTC")
+    DESIGN_END, HALVES, OUT = split, halves, RES / sub
+
+
 UNIVERSE = Path(__file__).with_name("universe_xs.csv")
 RS = (15, 5)
 U_ON = (0.8, 1.0)
@@ -33,9 +55,12 @@ LIQUIDATE = {"hold": False, "liquidate": True}
 MAKER_BP, TAKER_BP = 2.0, 5.0
 DELAY_MS, TIMEOUT_MS = 250, 1_800_000
 AS_LOOKBACK_D, SEL_LOOKBACK_D, SEL_MIN_TRIPS = 7, 7, 20
-DESIGN_END = "2026-08"
-OUT = RES / "xs"
 log = logging.getLogger("mm_tick.xs")
+set_period("main")
+
+
+def available(sym: str) -> list[str]:
+    return [m for m in MONTHS if E.trade_path(sym, m).exists()]
 
 
 def n_seconds() -> int:
@@ -51,7 +76,7 @@ def u_series(sym: str, R: int) -> np.ndarray:
         target = targets[c:c + 3]
         warm = MONTHS[MONTHS.index(target[0]) - 1]
         months = [warm] + target
-        g = E.second_grid(sym, months)
+        g = E.second_grid(sym, months, allow_missing=True)
         px = g["px"]
         del g
         az = anchored_z(px, R)
@@ -230,7 +255,7 @@ def need_by_day(sym: str, tick: float) -> np.ndarray:
     n_days = n_seconds() // E.DAY_S
     s = np.zeros(n_days)
     c = np.zeros(n_days)
-    for mo in MONTHS:
+    for mo in available(sym):
         tb = pq.read_table(E.trade_path(sym, mo), columns=["t", "px", "buyer_maker"])
         t = tb.column("t").to_numpy()
         px = tb.column("px").to_numpy()
@@ -252,12 +277,17 @@ def build(sym: str) -> None:
     if p.exists():
         return
     tick = ticks()[sym]
+    have = available(sym)
+    sim = [m for m in SIM_MONTHS if m in have]
+    if not sim:
+        log.warning("%s: not listed in this period", sym)
+        return
     need = need_by_day(sym, tick)
     us = {R: u_series(sym, R) for R in RS}
     start_ms = int(START.timestamp() * 1000)
     rows = []
     skipped = []
-    for mo in SIM_MONTHS:
+    for mo in sim:
         tb = pq.read_table(E.trade_path(sym, mo), columns=["t", "px", "buyer_maker"])
         t = tb.column("t").to_numpy()
         raw = tb.column("px").to_numpy() / tick
@@ -328,7 +358,9 @@ def summary(n_random: int = 200, seed: int = 0) -> pd.DataFrame:
     first_sim_day = int((pd.Timestamp(SIM_MONTHS[0] + "-01", tz="UTC") - START).days) + SEL_LOOKBACK_D
     daily = daily[daily["day"] >= first_sim_day]
     cut = int((pd.Timestamp(DESIGN_END + "-01", tz="UTC") - START).days)
-    daily["half"] = np.where(daily["day"] < cut, "design", "confirm")
+    daily["half"] = np.where(daily["day"] < cut, HALVES[0], HALVES[1])
+    if PERIOD != "main":
+        daily = pd.concat([daily, daily.assign(half="whole")], ignore_index=True)
     rng = np.random.default_rng(seed)
     rows = []
     for key, x in daily.groupby(["R", "rule", "u_on", "exit", "half"]):
@@ -357,10 +389,11 @@ def summary(n_random: int = 200, seed: int = 0) -> pd.DataFrame:
                 row["random_mean"], row["random_p95"] = float(np.mean(vals)), float(np.percentile(vals, 95))
             rows.append(row)
     out = pd.DataFrame(rows)
-    out.to_csv(RES / "summary_xs.csv", index=False)
-    per_sym = daily.groupby(["R", "rule", "u_on", "exit", "sym"])[["sum", "count"]].sum().reset_index()
+    tag = "" if PERIOD == "main" else "_" + PERIOD
+    out.to_csv(RES / f"summary_xs{tag}.csv", index=False)
+    per_sym = daily.groupby(["R", "rule", "u_on", "exit", "half", "sym"])[["sum", "count"]].sum().reset_index()
     per_sym["pnl_per_trip_bp"] = per_sym["sum"] / per_sym["count"].clip(lower=1)
-    per_sym.to_csv(RES / "summary_xs_by_symbol.csv", index=False)
+    per_sym.to_csv(RES / f"summary_xs{tag}_by_symbol.csv", index=False)
     return out
 
 
@@ -368,8 +401,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["build", "summary"])
     ap.add_argument("--symbols", nargs="*")
+    ap.add_argument("--period", choices=list(PERIODS), default="main")
     a = ap.parse_args(argv)
     logging.basicConfig(level="INFO", format="%(asctime)s %(message)s")
+    set_period(a.period)
     if a.cmd == "build":
         syms = a.symbols or pd.read_csv(UNIVERSE)["sym"].tolist()
         for s in syms:

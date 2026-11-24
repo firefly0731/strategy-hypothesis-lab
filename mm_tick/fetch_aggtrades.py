@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import logging
 import shutil
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -95,7 +96,13 @@ def fetch(sym: str, month: str, out: Path, min_free_gb: float) -> str:
         raise SystemExit(f"stop: {free:.1f} GB free < {min_free_gb} GB")
     fn = f"{sym}-aggTrades-{month}.zip"
     zpath, cpath = d / fn, d / (fn + ".CHECKSUM")
-    _get(f"{BASE}/{sym}/{fn}.CHECKSUM", cpath)
+    try:
+        _get(f"{BASE}/{sym}/{fn}.CHECKSUM", cpath)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:                   # not listed (yet) in that month
+            cpath.unlink(missing_ok=True)
+            return "not listed"
+        raise
     _get(f"{BASE}/{sym}/{fn}", zpath)
     want = cpath.read_text().split()[0]
     if _sha256(zpath) != want:
