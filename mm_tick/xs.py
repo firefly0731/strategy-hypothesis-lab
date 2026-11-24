@@ -287,16 +287,21 @@ def build(sym: str) -> None:
         return
     df = pd.concat(rows, ignore_index=True)
     df["day"] = ((df["t"] - start_ms) // 86_400_000).astype(np.int32)
-    df.attrs["skipped"] = ",".join(skipped)
-    df.to_parquet(p)
-    log.info("%s: %d trips (all variants)", sym, len(df))
+    # store daily aggregates only (disk budget); p01 is the daily 1st percentile of trip PnL
+    g = df.groupby(["R", "rule", "u_on", "exit", "day"])
+    agg = g["pnl_bp"].agg(["sum", "count"]).reset_index()
+    agg["n_tp"] = g["by_tp"].sum().to_numpy()
+    agg["n_improved"] = g["improved"].sum().to_numpy()
+    agg["p01"] = g["pnl_bp"].quantile(0.01).to_numpy()
+    agg["skipped_months"] = ",".join(skipped)
+    agg.to_parquet(p)
+    log.info("%s: %d trips (all variants), %d skipped months", sym, len(df), len(skipped))
 
 
 def daily_table() -> pd.DataFrame:
     frames = []
     for f in sorted(OUT.glob("*.parquet")):
-        d = pd.read_parquet(f)
-        g = d.groupby(["R", "rule", "u_on", "exit", "day"])["pnl_bp"].agg(["sum", "count"]).reset_index()
+        g = pd.read_parquet(f, columns=["R", "rule", "u_on", "exit", "day", "sum", "count", "n_tp", "n_improved"])
         g["sym"] = f.stem
         frames.append(g)
     return pd.concat(frames, ignore_index=True)
