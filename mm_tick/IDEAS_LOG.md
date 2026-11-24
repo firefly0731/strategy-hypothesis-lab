@@ -84,3 +84,16 @@ the exchange tick was 10–100x coarser (ZIL, HOT, KAVA, W, IDOL among them), wh
 impossible inside-the-spread quotes. Found when the 2025 extension gave +14 bp per trip, 64% of
 it from GTC (tick 100x today's then). See DESIGN.md, "Bug fix before the re-run"; re-run results
 follow.
+
+| # | Test (tick in force each day, `xs_v2/`, `xs_early_v2/`) | Result | Verdict |
+|---|---|---|---|
+| 21 | All symbols, primary settings | 2026-05..07 −9.39, 2026-08..10 −9.38, 2025-05..11 −9.43 bp per trip; through rule −10.6 to −10.9 | the maker loses on every coin on average |
+| 22 | By symbol, whole sample | 0 of 75 (2026) and 0 of 70 (2025) coins positive; best TA −2.9 bp. ZIL −10.6, HOT −11.0, IDOL −7.4, GTC −5.9 / −28.1 | no coin carries an edge |
+| 23 | Selected book (X1, X3) | 2026-05..07: no coin ever selected; 2026-08..10: TA on 12 days only, +2.28 bp (CI −0.19..5.04); 2025: no coin selected | **X1 fails, X3 fails. Stage X rejected** |
+
+Reading
+- With the real tick, the coins that looked profitable have one-tick spreads most of the time, so
+  the "improve by one tick" quote does not exist and the maker joins long queues; adverse
+  selection and fees then dominate, as in stage S.
+- TA is the only coin whose earlier result did not change (its tick was unchanged in 2026), and
+  alone it does not pass.
