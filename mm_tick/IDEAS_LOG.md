@@ -170,3 +170,20 @@ Reading
   information in these features, not about the fit.
 - The prior choice at the grid edge would only shrink the predictions further toward −9.4 bp;
   it cannot create kept trips.
+
+## Stage H: cut a held position or keep it (conditional continuation value, trade-only features)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 37 | One additive Bayesian linear model per checkpoint (5 s .. 25 min after entry), target = final − cut PnL; policy cuts at the first predicted A < 0; test 2026-08..10 | Hold −9.38 bp, policy **−9.39 bp** [−9.56, −9.21]; gain −0.02 [−0.09, +0.06]; 21% of trips cut | **H1 fails**, no gain at all |
+| 38 | What the model sees | Rank IC with A: 0.28–0.29 at 5–10 s, falling to 0.07 at 15–25 min. Mean A is positive at every checkpoint (+3.4 bp at 5 s, +0.8 at 25 min): holding beats a taker cut on average; where the model says cut, A ≈ 0 | it ranks, but finds no rows where cutting pays |
+| 39 | Hindsight ceiling (best of hold and every checkpoint cut, per trip) | **+0.64 bp** per trip (test), +0.76 design | the exit decision is worth up to ~10 bp with perfect foresight |
+
+Reading
+- The taker cut costs 5 bp plus the spread, and a held loser has usually already moved by the
+  time any checkpoint sees it. With these features, the expected value of cutting never exceeds
+  the value of waiting, so the money in the exit decision (up to 10 bp with hindsight) is not
+  reachable from trade data.
+- The same pattern as stages P and E: the trade tape ranks risk, but not by enough to pay the fees.
+  The order book (stage OB, collection started 2026-11-25, bookTicker of 6 coins) is the next
+  information set.

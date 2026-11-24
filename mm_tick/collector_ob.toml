@@ -1,0 +1,21 @@
+# Order-book collection for the MM edge study (stage OB). Raw files are never deleted by the
+# collector (retention_days = 0); mm_tick.ob_compact converts each finished UTC day to parquet and
+# deletes a raw file only after verification (user decision 2026-11-25).
+# Only bookTicker: diff depth costs ~2x the disk (pilot 2026-11-24), and aggTrades of every coin
+# (BTC included) are published daily on data.binance.vision, so they are downloaded, not collected.
+out_dir = "C:/Users/smile-user/md_local/ob_raw"
+ws_url = "wss://fstream.binance.com/stream"
+rest_url = "https://fapi.binance.com"
+snapshot_limit = 1000
+snapshot_every_s = 3600
+reconnect_every_s = 82800
+retention_days = 0
+min_free_gb = 3
+
+[symbols]
+JCTUSDT = ["bookTicker"]
+TAUSDT = ["bookTicker"]
+GTCUSDT = ["bookTicker"]
+WLDUSDT = ["bookTicker"]
+AIOTUSDT = ["bookTicker"]
+PUMPUSDT = ["bookTicker"]
