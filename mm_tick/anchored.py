@@ -30,11 +30,10 @@ def anchored_z(px: np.ndarray, R_min: int) -> dict:
     n = n_days * E.DAY_S
     lp = np.log(px[:n])
     # anchor: last price at the start of the window = price at the end of the previous second
-    start = (np.arange(n) // Rs) * Rs
-    anchor_lp = np.where(start > 0, lp[np.maximum(start - 1, 0)], lp[0])
-    del start
-    y = (lp - anchor_lp).astype(np.float32)
-    del anchor_lp
+    w = lp.reshape(-1, Rs)
+    anchor = np.r_[lp[0], w[:-1, -1]]
+    y = (w - anchor[:, None]).astype(np.float32).reshape(-1)
+    del w, anchor
     cs = np.cumsum(np.nan_to_num(np.abs(np.diff(lp, prepend=lp[0]))))
     del lp
     rv = np.full(n, np.nan, dtype=np.float32)

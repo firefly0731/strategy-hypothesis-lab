@@ -44,6 +44,8 @@ def grid_hl(sym: str, months: list[str]) -> dict:
             sec = (df["t"].to_numpy() - start_ms) // 1000
             ok = (sec >= 0) & (sec < n)
             sec = sec[ok]
+            if not len(sec):
+                continue
             p = df["px"].to_numpy()[ok]
             bm = df["buyer_maker"].to_numpy()[ok]
             notional = (p * df["qty"].to_numpy()[ok]).astype(np.float64)
@@ -55,7 +57,9 @@ def grid_hl(sym: str, months: list[str]) -> dict:
             px[us] = p[ends]
             side[us] = np.where(bm[ends], -1, 1)                 # buyer is maker -> taker sold
             signed = np.where(bm, -notional, notional)
-            net += np.bincount(sec, signed, minlength=n).astype(np.float32)
+            off = int(sec[0])
+            bc = np.bincount(sec - off, signed)
+            net[off: off + len(bc)] += bc.astype(np.float32)
             del df
     px = pd.Series(px).ffill().to_numpy()
     return {"start_ms": start_ms, "px": px, "hi": hi, "lo": lo, "side": side, "net": net}
