@@ -40,3 +40,19 @@ Reading
   −0.5 bp (`research/mm/06`) and any maker fee (2 bp on USDT-M) are larger. Only a 0 bp maker venue
   (USDC-M) could use it, and only if the queue-aware test keeps a positive value.
 - Next check: the one-day order book recording, mid price against trade price, for the bounce part.
+
+## Stage S: 20 bp spread scalper with the band switch (user's specification)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 11 | Through rule (back of the queue), all 11 symbols, any u_on / exit_u | −4.7 to −6.6 bp per round trip in both halves; CIs far below 0 | **S1 fails** |
+| 12 | Touch rule (front of the queue) | Best: hold on band exit, about 0 (−0.2..+0.1 bp, CIs span 0) | no edge even when optimistic |
+| 13 | Band switch (u_on 0.8 / 0.95 vs 1.0) | No consistent gain under either rule | **S2 fails** |
+| 14 | Liquidate on band exit vs hold (S3) | Liquidation lowers the mean (touch, u_on 0.8: hold −0.04/−0.15, exit 0.99 −0.39/−0.57, exit 0.95 −1.41/−1.44) and improves the 1% tail (−180 → −162 → −132 bp) | pays about 1.4 bp per trip for tail protection |
+| 15 | By symbol, touch rule | Large-tick coins positive (NEAR +3.4, ADA +1.6, FET +1.3, TRUMP +1.0); majors negative (−1.4 to −3.5). Under the through rule all are −3.3 to −7.1 | the large-tick gain exists only at the front of the queue |
+
+Reading
+- Round trips win +19.9 bp about 2/3 of the time and lose about −40 bp on a timeout the rest:
+  the classic maker profile, and adverse selection removes the edge.
+- For large-tick coins the answer depends on queue position. The one-day order book recording
+  (ADA, TRUMP) is the right test for that.
