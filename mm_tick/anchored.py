@@ -97,6 +97,9 @@ def build(sym: str, seed: int = 0) -> None:
     tick = ticks()[sym]
     g = E.second_grid(sym, MONTHS)
     px = g["px"]
+    for k_ in ("buy", "sell", "cnt"):
+        g.pop(k_)
+    gc.collect()
     rng = np.random.default_rng(seed)
     for R in RS_MIN:
         todo = [q for q in E.QS if not (RES / f"anch_{sym}_R{R}_q{q}.parquet").exists()]
@@ -104,22 +107,26 @@ def build(sym: str, seed: int = 0) -> None:
             continue
         az = anchored_z(px, R)
         k = E.thresholds(az["z"], az["n_days"])
+        pending = []
         for j, q in enumerate(E.QS):
-            p = RES / f"anch_{sym}_R{R}_q{q}.parquet"
-            if p.exists():
+            if q not in todo:
                 continue
             ev = anchored_breaks(az, k, j)
             ev = ev[ev["i"] >= 2 * E.LOOKBACK_D * E.DAY_S].reset_index(drop=True)
             ctl = matched_controls(az["n_days"], ev, az["Rs"], rng)
             both = pd.concat([ev.assign(ctl=False), ctl.assign(ctl=True)], ignore_index=True)
             both = both.sort_values("i", kind="stable").reset_index(drop=True)
+            both["absy_bp"] = np.abs(az["y"][both["i"].to_numpy()]) * 1e4
+            pending.append((q, both))
+        del az, k
+        gc.collect()
+        for q, both in pending:                     # price lookups after the big arrays are freed
             out = E.outcomes(sym, MONTHS, g["start_ms"], both, horizons=HORIZONS_S)
             out["cost"] = [E.cost_bp(tick, v) for v in px[out["i"].to_numpy()]]
             out["day"] = out["i"] // E.DAY_S
-            out["absy_bp"] = np.abs(az["y"][out["i"].to_numpy()]) * 1e4
-            out.to_parquet(p)
+            out.to_parquet(RES / f"anch_{sym}_R{R}_q{q}.parquet")
             log.info("%s R=%d q=%s: %d events", sym, R, q, int((~out["ctl"]).sum()))
-        del az, k
+        del pending
         gc.collect()
 
 

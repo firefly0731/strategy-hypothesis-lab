@@ -163,12 +163,24 @@ def breaks(zs: dict, k: np.ndarray, j: int, L: int) -> pd.DataFrame:
 # ----------------------------------------------------------------------------- pass 2
 
 def _load_tp(sym: str, month: str, base_ms: int, until_ms=None):
-    """Trade times as uint32 ms after `base_ms` and prices as float32 (about 0.001 bp precision)."""
-    filt = [("t", "<", until_ms)] if until_ms is not None else None
-    tb = pq.read_table(trade_path(sym, month), columns=["t", "px"], filters=filt)
-    t = (tb.column("t").to_numpy() - base_ms).astype(np.uint32)
-    p = tb.column("px").to_numpy().astype(np.float32)
-    return t, p
+    """Trade times as uint32 ms after `base_ms` and prices as float32 (about 0.001 bp precision).
+    Read row group by row group to keep peak memory low."""
+    pf = pq.ParquetFile(trade_path(sym, month))
+    ts, ps = [], []
+    for rg in range(pf.num_row_groups):
+        tb = pf.read_row_group(rg, columns=["t", "px"])
+        t = tb.column("t").to_numpy()
+        if until_ms is not None:
+            keep = t < until_ms
+            if not keep.any():
+                break
+            t, p = t[keep], tb.column("px").to_numpy()[keep]
+        else:
+            p = tb.column("px").to_numpy()
+        ts.append((t - base_ms).astype(np.uint32))
+        ps.append(p.astype(np.float32))
+        del tb, t, p
+    return np.concatenate(ts), np.concatenate(ps)
 
 
 def outcomes(sym: str, months: list[str], start_ms: int, ev: pd.DataFrame,
