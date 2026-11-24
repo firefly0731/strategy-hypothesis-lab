@@ -193,3 +193,16 @@ leaves the band. This replaces the one-tick take-profit above; everything else s
 - **Criteria:** S1 and S2 as above, for any (u_on, exit_u). Added S3 (descriptive): liquidating
   on a band exit is compared with holding, by mean PnL and by the 1st percentile of trip PnL.
 Variants: 2 fill rules × 3 u_on × 3 exit_u × 11 symbols.
+
+## Stage X: cross-sectional, monitored maker (2026-24-11, universe fixed before any download)
+User idea: pick, every day, only the coins where a maker earns the spread net of fees and
+slippage inside the strong-reversion zone of a short conditional band; leave a coin as soon as
+the opportunity fades (band break, or the monitored edge turning negative).
+
+Universe (`universe_xs.csv`, from one exchange snapshot on 2026-11-24): Binance USDT-M perps
+listed before 2026-03-01, 24 h volume $5M–300M, and one tick ≥ 3 bp or a current spread ≥ 4 bp
+(that is, the round-trip maker fee can be covered). Symbols whose 2026-04..10 aggTrades zips
+exceed 1 GB are left out for the disk budget (AKE, H, Q, VELVET, SKYAI, BANK, LAB). 77 symbols.
+Data: 2026-04 (warm-up) .. 2026-10. Known bias: the snapshot keeps only coins still listed and
+liquid today (survivorship). The strategy rules and criteria are written before any simulation,
+in the next section.
