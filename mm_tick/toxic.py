@@ -167,7 +167,7 @@ def build() -> None:
     g = df.groupby(["sym", "day"])["y"].agg(["sum", "count"]).reset_index()
     out = []
     for s, x in g.groupby("sym"):
-        x = x.set_index("day").reindex(range(g["day"].min(), g["day"].max() + 1), fill_value=0)
+        x = x.set_index("day")[["sum", "count"]].reindex(range(g["day"].min(), g["day"].max() + 1), fill_value=0)
         ls = x["sum"].rolling(7, min_periods=1).sum().shift(2) / x["count"].rolling(7, min_periods=1).sum().shift(2)
         out.append(pd.DataFrame({"sym": s, "day": x.index, "loss7": ls.to_numpy()}))
     df = df.merge(pd.concat(out), on=["sym", "day"], how="left")
