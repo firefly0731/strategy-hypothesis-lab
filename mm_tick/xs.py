@@ -311,7 +311,8 @@ def select(daily: pd.DataFrame) -> pd.DataFrame:
     """Mark (sym, day) active from the previous SEL_LOOKBACK_D days only."""
     out = []
     for key, x in daily.groupby(["R", "rule", "u_on", "exit", "sym"]):
-        x = x.set_index("day").reindex(range(daily["day"].min(), daily["day"].max() + 1), fill_value=0)
+        x = (x[["day", "sum", "count", "n_tp", "n_improved"]].set_index("day")
+             .reindex(range(daily["day"].min(), daily["day"].max() + 1), fill_value=0))
         s = x["sum"].rolling(SEL_LOOKBACK_D, min_periods=1).sum().shift(1)
         n = x["count"].rolling(SEL_LOOKBACK_D, min_periods=1).sum().shift(1)
         x["active"] = (n >= SEL_MIN_TRIPS) & (s / n.where(n > 0) > 0)

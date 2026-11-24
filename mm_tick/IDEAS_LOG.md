@@ -56,3 +56,25 @@ Reading
   the classic maker profile, and adverse selection removes the edge.
 - For large-tick coins the answer depends on queue position. The one-day order book recording
   (ADA, TRUMP) is the right test for that.
+
+## Stage X: cross-sectional, monitored maker (77-symbol universe, 75 simulated)
+
+AGT and BULLA were dropped by the tick-grid check (their tick size changed, so most prices are
+off today's grid); ON lost 4 of 6 months the same way.
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 16 | All symbols every day (no selection), primary settings | −7.8 bp (design) / −8.6 bp (confirm) per round trip | the maker loses on the average coin |
+| 17 | Selected book (trailing 7-day PnL > 0, ≥ 20 trips), primary settings (R=15, u_on 0.8, hold, hybrid fill) | Design +7.92 bp per trip (CI 4.72..10.08), confirm +1.66 (CI 0.50..2.96); random books of the same size −7.65 / −8.48 (p95 −6.56 / −7.25) | **X1 passes** |
+| 18 | Same under the pessimistic through rule | +8.22 / +1.58 | holds at the back of the queue |
+| 19 | Band switch, R, liquidation (X2) | u_on 0.8 vs 1.0, R 5 vs 15, hold vs liquidate: differences ≤ 0.6 bp, inside the CIs | the band adds nothing; the selection does all the work |
+| 20 | Concentration | Design: ZIL 44%, HOT 42%, KAVA 15% of PnL (7 symbols ever selected). Confirm: IDOL 78%, TA 14%, W 7% (4 symbols). About 1–3 symbols active per day | fragile: few coins, and the edge decays from +7.9 to +1.7 bp |
+
+Reading
+- The monitoring rule finds coins whose maker PnL persists for weeks: tick-constrained, range-bound
+  coins where price oscillates over a few ticks (ZIL, tick 12 bp; HOT; IDOL with 7-tick spreads).
+- It is a walk-forward result: every selection uses only earlier days. But it rests on 3–4 coins
+  per half, on fill rules inferred from trades only, and on illiquid books where the touch
+  inferred from trades can be stale.
+- Next checks before any money: record the order books of the selected coins (IDOL, TA, W, ZIL,
+  HOT, KAVA) for a day or two, and replay the queue; then a minimum-size live test.
