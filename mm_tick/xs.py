@@ -25,7 +25,7 @@ from .run import RES, block_ci, ticks
 # "main" is the pre-registered test; "early" is the extension that covers the 12 months before it.
 PERIODS = {
     "main": ("2026-04", "2026-10", "2026-08", ("design", "confirm"), "xs"),
-    "early": ("2025-04", "2026-04", "2025-11", ("early_a", "early_b"), "xs_early"),
+    "early": ("2025-04", "2025-11", "2025-08", ("early_a", "early_b"), "xs_early"),   # cut for disk
 }
 PERIOD = "main"
 MONTHS: list[str] = []

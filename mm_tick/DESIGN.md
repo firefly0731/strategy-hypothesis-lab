@@ -259,3 +259,7 @@ CI spans 0). A longer, earlier sample is the test the main result cannot give.
   PnL share of the top symbols, and the result with the top one and top two symbols removed.
 - **Known biases, larger here:** the universe is a 2026-11 snapshot (coins still listed and liquid
   now), so survivorship is worse further back; the tick size is today's.
+- **Amendment (same day, before any simulation):** the 2025 months are larger than estimated
+  (1.0–1.4 GB each) and the disk ran short at 2025-12. The user chose to shorten the extension
+  instead of deleting more data: warm-up 2025-04, simulated 2025-05-08 .. 2025-11-30; halves
+  2025-05..07 and 2025-08..11. The gap 2025-12 .. 2026-04 stays untested. X3 is unchanged.
