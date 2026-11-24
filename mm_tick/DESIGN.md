@@ -137,3 +137,12 @@ Criteria (gross value; the CI is the day-block bootstrap as before):
   compares trade-price and mid-price reversion rates for the bounce effect.
 - This is still optimistic: queue position is ignored, so a real order fills less often when the
   price only touches it, and more often when the price goes through it.
+
+### Stage R clarification (written after the discovery table, before any hold-out run)
+"P(reversion) > 0.5" in R1 counts timeouts as neither, so it is ambiguous for large δ. Both
+readings are now fixed for R2, and nothing else changes:
+- **Primary cell (strict reading, P_rev > 0.5 of all samples and CI > 0):** R = 15, δ = 5 bp,
+  u in [0.5, 0.8): +0.137 bp per fill (CI 0.110..0.165), P_rev 0.504.
+- **Secondary cell (highest value, P_rev > P_adv):** R = 15, δ = 20 bp, u in [0.5, 0.8):
+  +0.418 bp (CI 0.299..0.555), P_rev 0.293 vs P_adv 0.284.
+R2 passes if the primary cell has a mean value > 0 on BNB/XRP/DOGE. The secondary cell is reported.

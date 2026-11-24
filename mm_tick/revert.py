@@ -180,11 +180,14 @@ def build(sym: str) -> None:
 def summary(group: str) -> pd.DataFrame:
     rows = []
     for R in RS_MIN:
-        df = pd.concat([pd.read_parquet(RES / f"rev_{s}_R{R}.parquet").assign(sym=s)
-                        for s in GROUPS[group]], ignore_index=True)
-        df["bin"] = pd.cut(df["u"], U_BINS, right=False)
         for d in DELTAS_BP:
             col = f"v{d}"
+            cols = ["u", "day", "flow_away", "tick_bp", "absy_bp", col]
+            df = pd.concat([pd.read_parquet(RES / f"rev_{s}_R{R}.parquet", columns=cols)
+                            .astype({"u": "float32", "tick_bp": "float32", "absy_bp": "float32",
+                                     col: "float32"}).assign(sym=s)
+                            for s in GROUPS[group]], ignore_index=True)
+            df["bin"] = pd.cut(df["u"], U_BINS, right=False)
             x = df[df[col].notna() & (df["tick_bp"] * 2 <= d)]        # δ >= 2 ticks
             for b, xb in x.groupby("bin", observed=True):
                 for split, xs in (("all", xb), ("flow_away", xb[xb.flow_away]),
