@@ -136,3 +136,21 @@ Reading
   with features that plausibly reach AUC ≥ 0.75; price-path features (the bands) measured
   0.1–0.4 bp of reversion, far below that. Order book features would be the candidate, which
   needs order book data first.
+
+## Stage P: Bayesian additive logistic model of "this round trip loses" (trade-only features)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 30 | Fit 2026-05..07 (prior scale picked on 07, flat across 0.1..10), test 2026-08..10 | AUC train 0.673, **test 0.682** (Aug 0.695, Sep 0.659, Oct 0.688); large / small tick 0.671 / 0.675; calibration within 0.3 pp in every decile | **P1 fails** (< 0.75), but the model is real and stable |
+| 31 | What carries it | Path length over 10 / 2 min (alone AUC 0.66 inverted), spread in ticks, tick size, the coin's past loss share, time since last trade. Flow imbalance and returns: ≤ 0.13 logit range | it predicts activity and volatility, not direction |
+| 32 | Economic check (kept fraction chosen on the design half) | Keeps 13.4% of test trips: −7.81 bp vs −9.38 for all | still a loss |
+| 33 | PnL by predicted-risk decile, test half (descriptive) | Loss share 3% → 28% across deciles, but the mean loss shrinks −386 → −54 bp; PnL −7.6 (safest) → −12.8 bp (riskiest) | frequency and severity of losses offset each other |
+
+Reading
+- The synthetic ceiling of stage C assumed that the score says nothing about the size of a
+  loss. The real score does: the trips least likely to lose are on very active coins whose rare
+  losses are huge. AUC on the binary label overstates the money a filter can make; at AUC 0.68
+  the real filter earns −7.8 bp, not the −0.8 bp the ceiling implied.
+- The right target is the expected PnL of the trip (or the loss severity together with its
+  probability), not the loss probability. Even the safest decile here is −7.6 bp, so a better
+  target would have to find about 8 bp per trip that these features do not show.
