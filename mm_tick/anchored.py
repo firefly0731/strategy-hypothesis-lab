@@ -23,8 +23,10 @@ MIN_TAU = 10
 log = logging.getLogger("mm_tick.anchored")
 
 
-def anchored_z(px: np.ndarray, R_min: int) -> dict:
-    """z = y / s for windows of R minutes; y = log(p / anchor). Uses only data before t."""
+def anchored_z(px: np.ndarray, R_min: int, full: bool = False) -> dict:
+    """z = y / s for windows of R minutes; y = log(p / anchor). Uses only data before t.
+    full=True also returns, per second, the log anchor and the scale den (z = y / den), so that
+    a band |z| <= q is the price range anchor * exp(+-q * den)."""
     Rs = R_min * 60
     n_days = len(px) // E.DAY_S
     n = n_days * E.DAY_S
@@ -33,6 +35,7 @@ def anchored_z(px: np.ndarray, R_min: int) -> dict:
     w = lp.reshape(-1, Rs)
     anchor = np.r_[lp[0], w[:-1, -1]]
     y = (w - anchor[:, None]).astype(np.float32).reshape(-1)
+    anchor_s = np.repeat(anchor, Rs) if full else None
     del w, anchor
     cs = np.cumsum(np.nan_to_num(np.abs(np.diff(lp, prepend=lp[0]))))
     del lp
@@ -49,10 +52,15 @@ def anchored_z(px: np.ndarray, R_min: int) -> dict:
     base_rv = E._prior_day_mean(E._per_day_hour(rv, n_days))            # [day, hour]
     s = (base_y / base_rv[:, :, None]).astype(np.float32)                # [day, hour, bucket]
     rv5 = rv.reshape(n_days, 24, w_per_h, n_b, BUCKET_S)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        z = y.reshape(n_days, 24, w_per_h, n_b, BUCKET_S) / (s[:, :, None, :, None] * rv5)
+    den = (s[:, :, None, :, None] * rv5).astype(np.float32)
     del rv, rv5
-    return {"y": y, "z": z.reshape(-1), "n_days": n_days, "Rs": Rs}
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z = y.reshape(n_days, 24, w_per_h, n_b, BUCKET_S) / den
+    out = {"y": y, "z": z.reshape(-1), "n_days": n_days, "Rs": Rs}
+    if full:
+        out["anchor"] = anchor_s
+        out["den"] = den.reshape(-1)
+    return out
 
 
 @njit(cache=True)

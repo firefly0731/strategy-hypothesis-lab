@@ -274,3 +274,41 @@ Fix: per UTC day, the tick in force is the largest m in (1000, 100, 10, 5, 2) ×
 ≥ 99% of that day's trade prices on its grid (days under 200 trades keep the previous value);
 each run of days is simulated in units of that tick. Everything else, including X1 and X3, is
 unchanged. Both periods are re-run into `xs_v2/` and `xs_early_v2/`.
+
+## Stage G: band-bounded inventory maker (user's specification, 2026-11-24, before any code run)
+Change from stage X: the band is a price range, not an on/off switch. Every resting order and
+the inventory stay inside it, and inventory may build up to a limit.
+
+**Band (per second, from data before that second):** anchor = price at the start of the current
+15-minute window; half-width = q80 × den, where den is the stage A-anchored scale (hour-of-day
+14-day baseline × 15-minute realised volatility) and q80 is the 80% point of |z| over the
+previous 14 days. Lower = anchor·exp(−q80·den), upper = anchor·exp(+q80·den), rounded inward to
+the tick in force (stage X fix).
+
+**Orders (one unit each; re-quoted on every trade, 250 ms to land):**
+- *Entry bid* while the inventory is ≥ 0 and < 5 units and the price is inside the band: at the
+  touch (one tick inside if the spread is ≥ 3 ticks), raised to the lower band edge if it is
+  below it, never at or above the market ask. With inventory > 0, also at most last entry −
+  need (a grid step), so units are added only as price falls. Only if the upper edge is at least
+  `need` above the bid (room for a profitable exit). Mirror for the entry ask.
+- *Exit ask* while long: max(touch ask, average entry + need), then **capped at the upper band
+  edge** (the user's rule: an order outside the band is moved to the band edge, even when that
+  is below break-even), never at or below the market bid. One unit per fill, FIFO. Mirror while
+  short (floored at the lower edge).
+- need = 2 × maker fee + trailing 7-day 10 s markout, as in stage X.
+- Fill rules as in stage X: hybrid (primary), through (bound).
+
+**Band break:** long and the trade price is below the lower edge → sell the whole inventory by
+taker at the bid. Short and above the upper edge → buy back by taker. A break on the favourable
+side is held (the exit order at the band edge then fills). End of each month: close by taker.
+
+**Fees:** maker 2 bp, taker 5 bp. **Universe and periods:** stage X universe and the tick in
+force; 2026-05..10 (halves as stage X) and 2025-05..11.
+
+**Variants (descriptive):** max inventory 1 (no build-up); break at the 99% point instead of
+the band edge (hold through small breaks).
+
+**Monitoring and criteria:** stage X selection (trailing 7-day PnL per closed unit > 0, ≥ 20
+closed units). **G1:** all-symbol book mean net PnL per closed unit, and **G2:** the selected
+book, each > 0 with the day-block CI above 0 in every half and, for G2, above the random-book
+p95. Also reported: by symbol, exit mix (maker / break / month end), inventory reached.
