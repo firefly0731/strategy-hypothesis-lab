@@ -22,3 +22,21 @@ Notes
   move already made before the break, not what follows it.
 - The one-day order book recording (`crypto_mm/collector.local.toml`) was started before these
   results and is kept for order book feature checks.
+
+## Anchored band (stage A-anchored) and fill reversion (stage R)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 6 | Anchored band break, discovery (R=5/15 min) | Best cell R=5, q=0.999, h=900 s: +1.70 bp after a break, net −3.30 (CI −5.42..−0.77). Continuation grows with q and h; it is +0.1 bp at 1 min | **rejected** (A1) |
+| 7 | Same cell, hold-out / large tick | +1.21 bp (net −3.79) / −2.23 bp (net −8.42) | **rejected**. Trends exist on the majors, but at about 1/3 of a taker exit |
+| 8 | Stage R, discovery: first passage after a fill (gross, maker 0 bp) | Mid-band zone u 0.5–0.8 is best: R=15 δ=5 +0.137 bp (CI 0.110..0.165, P_rev 0.504); δ=20 +0.418. The edge fades toward the band edge and turns negative above u=0.99 at δ=20 | R1 passes, but the effect is tiny |
+| 9 | Stage R, hold-out BNB/XRP/DOGE, cells fixed beforehand | Primary +0.134 bp (CI 0.101..0.166, P_rev 0.509); secondary +0.339. Same shape: u ≥ 0.99 −0.21 bp at δ=20 | **R2 passes** |
+| 10 | Stage R, large-tick group | +0.3 to +1.8 bp, flat across u bins (no band effect) | Consistent with bid-ask bounce and spread capture, which queue priority on long large-tick queues would erode; not a band effect |
+
+Reading
+- The band shape the user expected is real and replicates: reversion is most likely in the middle
+  of the conditional band and disappears at its edge, where quoting should stop.
+- The size is +0.1–0.4 bp per fill before queue effects. The measured 1 s maker markout of about
+  −0.5 bp (`research/mm/06`) and any maker fee (2 bp on USDT-M) are larger. Only a 0 bp maker venue
+  (USDC-M) could use it, and only if the queue-aware test keeps a positive value.
+- Next check: the one-day order book recording, mid price against trade price, for the bounce part.
