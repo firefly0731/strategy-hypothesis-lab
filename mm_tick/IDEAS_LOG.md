@@ -154,3 +154,19 @@ Reading
 - The right target is the expected PnL of the trip (or the loss severity together with its
   probability), not the loss probability. Even the safest decile here is −7.6 bp, so a better
   target would have to find about 8 bp per trip that these features do not show.
+
+## Stage E: Bayesian additive model of the expected round-trip PnL (same features as stage P)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 34 | Fit 2026-05..07 (prior ratio by July MSE; the strongest value on the grid, 1e5, won), test 2026-08..10, rule "quote only if predicted PnL > 0" | Rank IC with PnL: train 0.13, **test 0.14** (Aug 0.17, Sep 0.15, Oct 0.12). **No test trip has a predicted PnL > 0** (0 kept); with weaker priors July kept 0.01% of trips | **E1 fails** |
+| 35 | PnL by decile of the prediction, test half | Predicted −13.1 → −5.8 bp, realised −13.8 → **−5.4 bp** (best decile); top 1% chosen on July: −5.2 bp [−6.5, −4.0] | calibrated: the model ranks correctly and says no slice is positive |
+| 36 | Two-part model (loss probability × win / loss size), secondary | IC 0.004; best decile predicted −0.3 bp, realised −7.1 bp; kept 3.8% at −6.9 bp | worse and miscalibrated |
+
+Reading
+- Predicting the money directly roughly doubles what the binary filter recovers (best decile
+  −5.4 bp vs −7.6 bp), but the trade-only features cannot find a slice where the stage X maker
+  earns its fees. The model is calibrated out of sample, so this is a statement about the
+  information in these features, not about the fit.
+- The prior choice at the grid edge would only shrink the predictions further toward −9.4 bp;
+  it cannot create kept trips.

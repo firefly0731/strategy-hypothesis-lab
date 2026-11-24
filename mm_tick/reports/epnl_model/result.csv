@@ -1,0 +1,2 @@
+lam,ic_train,ic_test,kept_test,kept_share,pnl_kept,pnl_kept_lo,pnl_kept_hi,pnl_all,pnl_all_lo,n_sym_kept,E1
+100000.0,0.13017809333371072,0.13995764656397197,0,0.0,,,,-9.37552870591651,-9.601929652119418,0,False
