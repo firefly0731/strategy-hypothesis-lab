@@ -331,3 +331,32 @@ probability (or any model) is not worth building on these fees.
   AUC ≤ 0.60 is realistic for second-scale features in the literature; ≥ 0.75 is not.
 - **Simplification (optimistic):** skipping a trip does not change later trips (in reality the
   quote would rest and fill at another time), and the predictor costs nothing in latency.
+
+## Stage P: a Bayesian model of fill toxicity, target AUC ≥ 0.75 (2026-11-24, before any run)
+Label: y = 1 if a stage X primary round trip loses (net PnL < 0); stage C showed a filter needs
+AUC ≥ 0.75 on y to turn the maker positive.
+
+**Information set:** only trades strictly before the decision time τ = fill time − 250 ms (the
+quote that filled was set at least one reaction delay earlier). Trades of the same coin only
+(BTC and ETH were deleted for disk; cross-asset lead is a later step if this one is promising).
+All direction features are signed by the trip side d (+1 long, −1 short), so that > 0 means in
+favour of the position.
+- returns d·log(p_τ / p_{τ−W}) and taker flow imbalance d·(buy − sell)/(buy + sell) notional, for
+  W ∈ {1 s, 5 s, 30 s, 2 min, 10 min};
+- activity: trade count in W ∈ {5 s, 30 s, 2 min} relative to the last hour; path length
+  Σ|Δlog p| over {30 s, 2 min, 10 min} (bp); last trade notional relative to the 10-min mean;
+  log time since the last trade;
+- band: u and d·z (stage X band, R = 15); need; estimated spread in ticks; tick in bp; whether
+  the quote improved the touch; hour of day (sin, cos);
+- the coin's loss share over the previous 7 days of trips (past labels only).
+
+**Model:** logistic regression with a Gaussian prior (MAP by Newton, Laplace posterior). Every
+feature enters as one-hot bins at its training-set deciles (a Bayesian additive model, so
+non-linear shapes are allowed), plus an intercept. Prior scale τ chosen from {0.1, 0.3, 1, 3, 10}
+on the last design month (2026-07) with the model fit on 2026-05..06; then refit on all of
+2026-05..07 with that τ. Bins are fixed on the training data.
+
+**Test:** AUC on 2026-08..10 (never used for any choice). **P1:** AUC ≥ 0.75 → the economic
+check of stage C with the real scores (kept fraction chosen on the design half) and, only then,
+a second test on 2025 trips. Reported always: AUC by month and by symbol group, calibration, the
+top features. If AUC < 0.75 the model is reported as it is and not tuned further on the test.
