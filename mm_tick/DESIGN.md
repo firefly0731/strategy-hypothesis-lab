@@ -77,3 +77,30 @@ Stage B goes ahead if A1 and A2 pass. If A3 fails, stage B uses the plain thresh
 
 Statistics: every headline number is also shown per month. Variants counted for IDEAS_LOG:
 2 L × 5 q × 4 h × 6 d = 240 descriptive cells, of which 40 are at the primary delay, plus 1 model.
+
+## Stage A-anchored (2026-11-24, written after the stage A results, before any anchored result)
+Stage A measured fast jumps against a moving reference (the price L seconds ago). A slow drift
+out of a range never triggers it, and that drift is what loads a grid with inventory. This test
+uses a band fixed to an anchor, which is closer to the user's concept. Everything below was fixed
+before the anchored results were computed.
+
+- **Anchor:** the clock is split into windows of R minutes, R ∈ {5, 15}, starting on the UTC
+  hour. The anchor A is the last trade price at the start of a window; τ is the number of seconds
+  since then. (This stands in for a grid that recentres every R minutes.)
+- **Displacement:** y(τ) = log(p / A).
+- **Conditional scale:** s = (mean |y| over the previous 14 days at the same UTC hour and the same
+  10-second τ bucket) × (15-minute realised volatility / its 14-day mean at that hour). It is the
+  same structure as the intraday momentum σ (mean move from the open at the same minute), on a
+  shorter clock.
+- **Band and break:** z = y / s; k_q is the q-quantile of |z| over the previous 14 days,
+  q ∈ {0.90, 0.95, 0.99, 0.995, 0.999}. A break is the first second with τ ≥ 10 s and |z| > k_q.
+  There is at most one break per window, and its direction is sign(y).
+- **Outcome:** the same as stage A (entry at the first trade at or after t + d, cost
+  4 + max(1, tick/2) bp), with horizons h ∈ {30, 60, 300, 900} s and the same delays.
+- **Inventory note:** at a break the grid is loaded against the move. Holding it is worth the
+  continuation −g per unit, and a taker exit costs the cost per unit. So the decision depends
+  only on g against the cost, whatever the inventory size, and A1/A2 below are enough for stage A.
+- **Criteria:** A1 and A2 as in stage A, at d = 250 ms. The cells are 2 R × 5 q × 4 h = 40. The
+  large-tick group is reported in the same way. Random-time controls are matched on the hour
+  and on τ.
+- Variants added: 2 R × 5 q × 4 h × 6 d = 240 cells per group.
