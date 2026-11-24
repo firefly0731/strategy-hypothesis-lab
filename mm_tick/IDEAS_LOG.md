@@ -97,3 +97,20 @@ Reading
   selection and fees then dominate, as in stage S.
 - TA is the only coin whose earlier result did not change (its tick was unchanged in 2026), and
   alone it does not pass.
+
+## Stage G: band-bounded inventory maker (user's specification; tick in force)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 24 | All symbols, primary (band 80%, break at the band edge, up to 5 units, hybrid) | −10.09 / −9.96 bp per closed unit (2026 halves), −9.54 / −9.83 (2025 halves); CIs about ±0.3 | **G1 fails** |
+| 25 | By symbol, primary | 0 of 75 (2026) and 0 of 70 (2025) positive; best TA −6.9, 1000BONK −7.8 | no coin with an edge |
+| 26 | Selected book | almost never active (no coin has a positive trailing week); where active −21 to +0.1 bp on 1 coin | **G2 fails** |
+| 27 | Variants | 1 unit instead of 5: same (−9.5 to −10.1). Break at the 99% point: −9.4 to −9.7, fewer taker exits but larger losses on each. Through rule −10.1 to −10.7 | the band-bounded grid does not change the result |
+
+Reading
+- Inventory that builds up inside the band and exits at the band edge earns the same as the
+  one-unit maker: about −10 bp per unit. Each maker exit earns need minus fees, and the units
+  closed by a break or below break-even at the band edge lose more than that on average.
+- Across stages S, X and G, a trade-only maker on Binance USDT-M at regular fees (2 / 5 bp) loses
+  about 9–10 bp per round trip whatever the band rule. The band carries 0.1–0.4 bp of reversion
+  (stage R), an order of magnitude less than the fee and the adverse selection.
