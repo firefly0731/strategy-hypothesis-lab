@@ -57,6 +57,8 @@ LIQUIDATE = {"hold": False, "liquidate": True}
 MAKER_BP, TAKER_BP = 2.0, 5.0
 DELAY_MS, TIMEOUT_MS = 250, 1_800_000
 AS_LOOKBACK_D, SEL_LOOKBACK_D, SEL_MIN_TRIPS = 7, 7, 20
+KEYS = ["R", "rule", "u_on", "exit"]      # variant columns (stage G uses its own)
+NAME = "xs"
 log = logging.getLogger("mm_tick.xs")
 set_period("main")
 
@@ -367,7 +369,7 @@ def build(sym: str) -> None:
 def daily_table() -> pd.DataFrame:
     frames = []
     for f in sorted(OUT.glob("*.parquet")):
-        g = pd.read_parquet(f, columns=["R", "rule", "u_on", "exit", "day", "sum", "count", "n_tp", "n_improved"])
+        g = pd.read_parquet(f, columns=KEYS + ["day", "sum", "count", "n_tp", "n_improved"])
         g["sym"] = f.stem
         frames.append(g)
     return pd.concat(frames, ignore_index=True)
@@ -376,14 +378,14 @@ def daily_table() -> pd.DataFrame:
 def select(daily: pd.DataFrame) -> pd.DataFrame:
     """Mark (sym, day) active from the previous SEL_LOOKBACK_D days only."""
     out = []
-    for key, x in daily.groupby(["R", "rule", "u_on", "exit", "sym"]):
+    for key, x in daily.groupby(KEYS + ["sym"]):
         x = (x[["day", "sum", "count", "n_tp", "n_improved"]].set_index("day")
              .reindex(range(daily["day"].min(), daily["day"].max() + 1), fill_value=0))
         s = x["sum"].rolling(SEL_LOOKBACK_D, min_periods=1).sum().shift(1)
         n = x["count"].rolling(SEL_LOOKBACK_D, min_periods=1).sum().shift(1)
         x["active"] = (n >= SEL_MIN_TRIPS) & (s / n.where(n > 0) > 0)
         x = x.reset_index().rename(columns={"index": "day"})
-        for k_, v in zip(["R", "rule", "u_on", "exit", "sym"], key):
+        for k_, v in zip(KEYS + ["sym"], key):
             x[k_] = v
         out.append(x)
     return pd.concat(out, ignore_index=True)
@@ -399,11 +401,11 @@ def summary(n_random: int = 200, seed: int = 0) -> pd.DataFrame:
         daily = pd.concat([daily, daily.assign(half="whole")], ignore_index=True)
     rng = np.random.default_rng(seed)
     rows = []
-    for key, x in daily.groupby(["R", "rule", "u_on", "exit", "half"]):
+    for key, x in daily.groupby(KEYS + ["half"]):
         for book, xb in (("all", x), ("selected", x[x["active"]])):
             dv = xb.groupby("day")[["sum", "count"]].sum().rename(columns={"count": "n"})
             lo, hi = block_ci(dv)
-            row = dict(zip(["R", "rule", "u_on", "exit", "half"], key))
+            row = dict(zip(KEYS + ["half"], key))
             row.update({"book": book, "trips": int(dv["n"].sum()), "trips_per_day": dv["n"].mean(),
                         "syms_per_day": xb.groupby("day")["sym"].nunique().mean(),
                         "pnl_per_trip_bp": dv["sum"].sum() / max(dv["n"].sum(), 1), "ci_lo": lo, "ci_hi": hi})
@@ -426,10 +428,10 @@ def summary(n_random: int = 200, seed: int = 0) -> pd.DataFrame:
             rows.append(row)
     out = pd.DataFrame(rows)
     tag = "" if PERIOD == "main" else "_" + PERIOD
-    out.to_csv(RES / f"summary_xs{tag}.csv", index=False)
-    per_sym = daily.groupby(["R", "rule", "u_on", "exit", "half", "sym"])[["sum", "count"]].sum().reset_index()
+    out.to_csv(RES / f"summary_{NAME}{tag}.csv", index=False)
+    per_sym = daily.groupby(KEYS + ["half", "sym"])[["sum", "count"]].sum().reset_index()
     per_sym["pnl_per_trip_bp"] = per_sym["sum"] / per_sym["count"].clip(lower=1)
-    per_sym.to_csv(RES / f"summary_xs{tag}_by_symbol.csv", index=False)
+    per_sym.to_csv(RES / f"summary_{NAME}{tag}_by_symbol.csv", index=False)
     return out
 
 
