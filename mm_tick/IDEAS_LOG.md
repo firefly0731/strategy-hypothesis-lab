@@ -114,3 +114,25 @@ Reading
 - Across stages S, X and G, a trade-only maker on Binance USDT-M at regular fees (2 / 5 bp) loses
   about 9–10 bp per round trip whatever the band rule. The band carries 0.1–0.4 bp of reversion
   (stage R), an order of magnitude less than the fee and the adverse selection.
+
+## Stage C: ceiling for a fill-toxicity predictor (2026 trips of stage X, 2.34 M round trips)
+
+Trip check: 1,098,149 / 1,244,200 trips, −9.39 / −9.38 bp: identical to #21. Structure: 86.8% of
+trips win +2.9 bp on average, 13.2% lose −90.1 bp on average.
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 28 | Synthetic predictor, kept fraction chosen on 2026-05..07 from 10%..100% (pre-registered) | Confirm-half mean: AUC 0.55 −6.3, 0.60 −3.9, 0.65 −1.9, 0.70 −0.2, **0.75 +0.9**, 0.80 +1.8, 0.90 +2.6 bp; IC 0.20 −1.7, **0.30 +1.1** | needs AUC ≥ 0.75 or IC ≈ 0.3, keeping 10% of fills |
+| 29 | Same, finer fractions down to 0.5% (descriptive, added after #28) | Keeping 0.5% of fills: AUC 0.65 +0.25, 0.70 +1.6; IC 0.20 +1.6 | positive only on the most extreme 0.5% of scores, where the Gaussian synthetic score is most optimistic |
+
+Reading
+- Even a perfect predictor earns at most the average win, +2.9 bp per kept trip, because the
+  take-profit is set at the cost (need). The edge of a filter is avoiding the 13% of trips that
+  lose 90 bp, not improving the winners.
+- Realistic second-scale features reach AUC 0.55–0.60. At that quality every kept fraction loses
+  (−3.9 bp at 0.60). Reaching AUC 0.75 on the next 10 s–30 min of a coin would be a strong
+  directional forecast in its own right, worth more as a taker signal than as a maker filter.
+- Conclusion for the Bayesian idea: a posterior model of P(toxic fill) is worth building only
+  with features that plausibly reach AUC ≥ 0.75; price-path features (the bands) measured
+  0.1–0.4 bp of reversion, far below that. Order book features would be the candidate, which
+  needs order book data first.
