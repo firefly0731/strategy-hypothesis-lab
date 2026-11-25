@@ -42,7 +42,21 @@ CS = (None, 0.0, 5.0, 10.0, 20.0)
 THETAS = (None, 0.3, 0.5, 0.7)
 MAX_EXIT_ROWS = 3_000_000
 OUT = RES / "mspread"
+FEATS = list(MARKET)          # model features (stage N adds the market series)
+SIGN = list(SIGNED)
+MKT_SERIES = None
 log = logging.getLogger("mm_tick.mspread")
+
+
+def configure(stage: str, period: str = "main") -> None:
+    """Stage M (own-coin features) or N (plus the market series of mm_tick.market)."""
+    global OUT, FEATS, SIGN, MKT_SERIES
+    if stage == "N":
+        from .market import MKT, MKT_SIGNED, Market
+        OUT, FEATS, SIGN = RES / "mspread_n", MARKET + MKT, SIGNED + MKT_SIGNED
+        MKT_SERIES = Market(period)
+    else:
+        OUT, FEATS, SIGN, MKT_SERIES = RES / "mspread", list(MARKET), list(SIGNED), None
 
 
 @njit(cache=True)
@@ -276,12 +290,16 @@ def second_features(coin: Coin, mo: str, t, price, side, notional, mult) -> pd.D
     df["hour_sin"] = np.sin(2 * np.pi * hour / 24).astype(np.float32)
     df["hour_cos"] = np.cos(2 * np.pi * hour / 24).astype(np.float32)
     df.loc[np.searchsorted(t, tau, side="left") == 0, MARKET] = np.nan
+    if MKT_SERIES is not None:
+        sec_g = (tau - MKT_SERIES.start_ms) // 1000
+        for k, v in MKT_SERIES.features(sec_g, np.ones(len(tau)), df["ret_30s"].to_numpy()).items():
+            df[k] = v
     return df, m0
 
 
 def signed(feat: pd.DataFrame, idx: np.ndarray, d: np.ndarray) -> pd.DataFrame:
     x = feat.iloc[idx].reset_index(drop=True)
-    for c in SIGNED:
+    for c in SIGN:
         x[c] = x[c] * d
     return x
 
@@ -325,16 +343,16 @@ def run_sims(coin, mo, data, feat, m0, model, combos):
 
 
 def cm_predict(cm, feat, d):
-    x = feat[MARKET].copy()
-    for c in SIGNED:
+    x = feat[FEATS].copy()
+    for c in SIGN:
         x[c] = x[c] * d
     return predict(cm["bins"].codes(x), cm["w"], cm["b0"], cm["bins"])
 
 
 def market_eta(xm, feat, d):
     """Sum of the market-feature weights of the exit model (position terms are added in the loop)."""
-    x = feat[MARKET].copy()
-    for c in SIGNED:
+    x = feat[FEATS].copy()
+    for c in SIGN:
         x[c] = x[c] * d
     bins = xm["bins"]
     eta = np.zeros(len(x))
@@ -354,7 +372,7 @@ def training_rows(coin, trips, feat, m0, price_scale):
     d = trips["d"].to_numpy().astype(np.float64)
     tc = (trips["t"].to_numpy() - xs.DELAY_MS - m0) // 1000
     ok = (tc >= 0) & (tc < len(feat))
-    can = signed(feat, tc[ok], d[ok])[MARKET]
+    can = signed(feat, tc[ok], d[ok])[FEATS]
     can["pnl_bp"] = trips["pnl_bp"].to_numpy()[ok]
     can["t"] = trips["t"].to_numpy()[ok]
     rows = []
@@ -369,7 +387,7 @@ def training_rows(coin, trips, feat, m0, price_scale):
             continue
         x = signed(feat, si[live], d[live])
         mid = x["mid_px"].to_numpy()
-        x = x[MARKET]
+        x = x[FEATS]
         x["unreal_bp"] = (d[live] * (mid - entry_px[live]) / entry_px[live] * 1e4).astype(np.float32)
         x["to_tp_bp"] = (d[live] * (tp_px[live] - mid) / entry_px[live] * 1e4).astype(np.float32)
         x["elapsed_s"] = np.float32(k)
@@ -416,6 +434,27 @@ def build() -> None:
             log.info("%s: %d trips", sym, sum(len(x) for x in T))
 
 
+def rows_n() -> None:
+    """Stage N training rows: the stage M rows of the same M0 trips plus the market features."""
+    src, dst = RES / "mspread" / "parts", OUT / "parts"
+    dst.mkdir(parents=True, exist_ok=True)
+    mk, st = MKT_SERIES, MKT_SERIES.start_ms
+    for tp in sorted(src.glob("*_trips.parquet")):
+        sym = tp.name[: -len("_trips.parquet")]
+        if (dst / f"{sym}_trips.parquet").exists():
+            continue
+        trips = pd.read_parquet(tp, columns=["t", "d"]).drop_duplicates("t")
+        for nm in ("cancel", "exit"):
+            x = pd.read_parquet(src / f"{sym}_{nm}.parquet").merge(trips, on="t", how="left")
+            at = x["t"].to_numpy() - xs.DELAY_MS if nm == "cancel" else                 x["t"].to_numpy() + (x["elapsed_s"].to_numpy() * 1000).astype(np.int64)
+            f = mk.features((at - st) // 1000, x["d"].to_numpy().astype(np.float64), x["ret_30s"].to_numpy())
+            for k, v in f.items():
+                x[k] = v
+            x.drop(columns="d").to_parquet(dst / f"{sym}_{nm}.parquet")
+        pd.read_parquet(tp).to_parquet(dst / f"{sym}_trips.parquet")
+        log.info("%s rows", sym)
+
+
 def _month(t_ms: np.ndarray, period="main") -> np.ndarray:
     return pd.to_datetime(t_ms, unit="ms", utc=True).strftime("%Y-%m").to_numpy()
 
@@ -432,7 +471,7 @@ def fit() -> None:
     y = can["pnl_bp"].to_numpy().astype(np.float64)
     m = can["month"].to_numpy()
     tr, va = np.isin(m, ("2026-05", "2026-06")), m == "2026-07"
-    bins = Bins(can[tr], features=MARKET)
+    bins = Bins(can[tr], features=FEATS)
     A, b = normal_equations(bins.codes(can[tr]), bins, y[tr])
     cva = bins.codes(can[va])
     mse = [float(np.mean((y[va] - predict(cva, *ridge(A, b, lam), bins)) ** 2)) for lam in LAMBDAS]
@@ -440,7 +479,7 @@ def fit() -> None:
     yx = ex["y"].to_numpy().astype(np.float64)
     mx = ex["month"].to_numpy()
     trx, vax = np.isin(mx, ("2026-05", "2026-06")), mx == "2026-07"
-    bx = Bins(ex[trx], features=MARKET + POSITION)
+    bx = Bins(ex[trx], features=FEATS + POSITION)
     cx_tr, cx_va = bx.codes(ex[trx]), bx.codes(ex[vax])
     ll = []
     for tau in TAUS:
@@ -454,11 +493,11 @@ def fit() -> None:
     models = {"lam": lam, "tau": tau, "mse": mse, "logloss": ll}
     for nm, months in sets.items():
         r = np.isin(m, months)
-        cb = Bins(can[r], features=MARKET)
+        cb = Bins(can[r], features=FEATS)
         A, b = normal_equations(cb.codes(can[r]), cb, y[r])
         w, b0 = ridge(A, b, lam)
         rx = np.isin(mx, months)
-        xb = Bins(ex[rx], features=MARKET + POSITION)
+        xb = Bins(ex[rx], features=FEATS + POSITION)
         wx, b0x, _ = fit_map(xb.codes(ex[rx]), yx[rx], xb, tau)
         models[nm] = {"cancel": {"bins": cb, "w": w, "b0": b0}, "exit": {"bins": xb, "w": wx, "b0": b0x}}
     with open(OUT / "models.pkl", "wb") as f:
@@ -563,11 +602,15 @@ def report(period: str) -> None:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["build", "fit", "policy", "report"])
+    ap.add_argument("cmd", choices=["build", "rows", "fit", "policy", "report"])
     ap.add_argument("--period", default="main", choices=sorted(xs.PERIODS))
+    ap.add_argument("--stage", default="M", choices=["M", "N"])
     a = ap.parse_args(argv)
     logging.basicConfig(level="INFO", format="%(asctime)s %(message)s")
-    if a.cmd == "build":
+    configure(a.stage, a.period if a.cmd == "policy" else "main")
+    if a.cmd == "rows":
+        rows_n()
+    elif a.cmd == "build":
         build()
     elif a.cmd == "fit":
         fit()
