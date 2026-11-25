@@ -20,6 +20,7 @@ import datetime as dt
 import gzip
 import json
 import logging
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -117,7 +118,7 @@ def compact_day(day_dir: Path, out_root: Path, delete_raw: bool) -> list[dict]:
         r = {"day": day_dir.name, "sym": sym, "raw_mb": gz.stat().st_size / 1e6, "ok": False, "deleted": False}
         try:
             frames, n, bad = parse_file(gz)
-        except (EOFError, OSError) as e:          # truncated or corrupt gzip: keep the raw file
+        except (EOFError, OSError, zlib.error) as e:      # truncated or corrupt gzip: keep the raw file
             r["error"] = f"read: {e}"
             rep.append(r)
             continue

@@ -66,3 +66,18 @@ def test_bbo_prices_round_trip_through_ticks():
     assert list(y["lat_ms"]) == [2, 2]
     assert ((y["bid_k"] * y["tick"] - x["bid"]).abs() < 1e-9).all()
     assert (((y["bid_k"] + y["spr_k"]) * y["tick"] - x["ask"]).abs() < 1e-9).all()
+
+
+def test_corrupt_member_in_the_middle_is_kept_and_does_not_stop_the_day(tmp_path):
+    day = tmp_path / "raw" / "20200101"
+    day.mkdir(parents=True)
+    p = day / "axusdt.gz"
+    _write(p, LINES * 200)
+    data = p.read_bytes()
+    _write(day / "tail.gz", LINES)
+    p.write_bytes(data[: len(data) // 2] + (day / "tail.gz").read_bytes())   # truncated member, then a new one
+    (day / "tail.gz").unlink()
+    _write(day / "bxusdt.gz", LINES)
+    rep = compact_day(day, tmp_path / "pq", delete_raw=True)
+    assert [r["sym"] for r in rep] == ["axusdt", "bxusdt"]
+    assert not rep[0]["ok"] and p.exists() and rep[1]["ok"] and rep[1]["deleted"]
