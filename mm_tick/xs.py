@@ -122,14 +122,15 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
     """Prices in whole ticks. Returns (entry_ms, pnl_bp_net, by_tp, improved_entry, side) per trip;
     side +1 long, -1 short."""
     r = simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquidate,
-                        delay, timeout, maker_bp, taker_bp)
+                        delay, timeout, maker_bp, taker_bp, 0.0)
     return r[0], r[1], r[2], r[3], r[4]
 
 
 @njit(cache=True)
 def simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquidate,
-                    delay, timeout, maker_bp, taker_bp):
-    """simulate_x plus (exit_ms, entry_px, tp_px) per trip, prices in ticks."""
+                    delay, timeout, maker_bp, taker_bp, depth_bp):
+    """simulate_x plus (exit_ms, entry_px, tp_px) per trip, prices in ticks. depth_bp > 0 rests the
+    entry quotes ceil(depth_bp * price) ticks behind the touch (never improved)."""
     n = len(t)
     cap = n // 2 + 1
     ent_t = np.empty(cap, dtype=np.int64)
@@ -244,7 +245,10 @@ def simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, l
                 and bid_m == bid_m and ask_m == ask_m
             if allow:
                 spr = ask_m - bid_m
-                if spr >= 3.0:
+                if depth_bp > 0:
+                    dk = max(np.ceil(depth_bp * 1e-4 * bid_m), 1.0)
+                    b_, a_, d_imp = bid_m - dk, ask_m + dk, False
+                elif spr >= 3.0:
                     b_, a_, d_imp = bid_m + 1.0, ask_m - 1.0, True
                 else:
                     b_, a_, d_imp = bid_m, ask_m, False

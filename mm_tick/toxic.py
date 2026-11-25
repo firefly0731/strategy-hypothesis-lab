@@ -75,7 +75,7 @@ def window_features(t, lp, side, notional, tau, d) -> dict:
     return f
 
 
-def build_symbol(sym: str) -> pd.DataFrame | None:
+def build_symbol(sym: str, depth_bp: float = 0.0) -> pd.DataFrame | None:
     tick = ticks()[sym]
     sim = [m for m in xs.SIM_MONTHS if m in xs.available(sym)]
     if not sim:
@@ -102,9 +102,10 @@ def build_symbol(sym: str) -> pd.DataFrame | None:
         trips = []
         for a, b in zip(np.r_[0, cuts], np.r_[cuts, len(t)]):
             m = float(mult[a])
-            et, pl, tp, im, sd = xs.simulate_x(t[a:b], np.rint(px[a:b] / m), side[a:b], u, need, start_ms,
-                                               xs.RULES["hybrid"], 0.8, xs.EXIT_U, False,
-                                               xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP)
+            r = xs.simulate_x_full(t[a:b], np.rint(px[a:b] / m), side[a:b], u, need, start_ms,
+                                   xs.RULES["hybrid"], 0.8, xs.EXIT_U, False,
+                                   xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP, depth_bp)
+            et, pl, tp, im, sd = r[:5]
             trips.append(pd.DataFrame({"t": et, "pnl_bp": pl.astype(np.float32), "by_tp": tp,
                                        "improved": im, "d": sd, "tick_mult": m}))
         tr = pd.concat(trips, ignore_index=True)
@@ -141,16 +142,18 @@ def build_symbol(sym: str) -> pd.DataFrame | None:
     return df
 
 
-def build() -> None:
+def build(depth_bp: float = 0.0) -> None:
+    """depth 0: the stage P table (with per-symbol parts); depth > 0: stage D, one table per depth."""
     xs.set_period("main")
-    part = RES / "toxic_parts"
+    tag = "" if depth_bp == 0 else f"_d{int(depth_bp)}"
+    part = RES / f"toxic_parts{tag}"
     part.mkdir(exist_ok=True)
     for s in pd.read_csv(xs.UNIVERSE)["sym"]:
         p = part / f"{s}.parquet"
         if p.exists():
             continue
         try:
-            d = build_symbol(s)
+            d = build_symbol(s, depth_bp)
         except FileNotFoundError:
             d = None
         if d is not None:
@@ -173,16 +176,17 @@ def build() -> None:
     df = df.merge(pd.concat(out), on=["sym", "day"], how="left")
     df["loss7"] = df["loss7"].astype(np.float32)
     df["month"] = (xs.START + pd.to_timedelta(df["day"], unit="D")).dt.strftime("%Y-%m")
-    df.to_parquet(OUT)
+    df.to_parquet(RES / f"toxic_features{tag}.parquet")
     log.info("features: %d trips, %d columns", len(df), df.shape[1])
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["build"])
+    ap.add_argument("--depth", type=float, default=0.0, help="entry quotes this many bp behind the touch")
     a = ap.parse_args(argv)
     logging.basicConfig(level="INFO", format="%(asctime)s %(message)s")
-    build()
+    build(a.depth)
 
 
 if __name__ == "__main__":

@@ -133,7 +133,7 @@ def build_symbol(sym: str):
             m = float(mult[a])
             r = xs.simulate_x_full(t[a:b], np.rint(px[a:b] / m), side[a:b], u, need, start_ms,
                                    xs.RULES["hybrid"], 0.8, xs.EXIT_U, False,
-                                   xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP)
+                                   xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP, 0.0)
             et, pl, tp, im, sd, ex, en, tpp = r
             parts.append(pd.DataFrame({"t": et, "ex_t": ex, "pnl_bp": pl.astype(np.float32), "by_tp": tp,
                                        "improved": im, "d": sd, "entry": en * m * tick, "tp": tpp * m * tick,

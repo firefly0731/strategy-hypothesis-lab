@@ -73,3 +73,18 @@ def test_side_is_reported_per_trip():
     out = simulate_x(t, px, side, np.full(10, 0.5, np.float32), np.full(5, 5.0), 0, 2, 0.8, 0.99, False,
                      250, 1_800_000, M, TK)
     assert out[4][0] == 1                      # the first trip was a long (our bid filled first)
+
+
+def test_depth_quote_rests_behind_the_touch_and_needs_a_trade_through():
+    from mm_tick.xs import simulate_x_full
+    # touch 1000 / 1001; depth 30 bp at price 1000 -> 3 ticks: bid 997, ask 1004
+    # a sell at 997 does not fill the 997 bid (no trade through it); a sell at 996 within the
+    # 250 ms before the quote follows the new touch does
+    t = np.array([1000, 1100, 2000, 2100, 4000], np.int64)        # u is read from the previous second
+    px = np.array([1000, 1001, 997, 996, 1001], float)
+    side = np.array([-1, 1, -1, -1, 1], np.int8)
+    r = simulate_x_full(t, px, side, np.full(10, 0.5, np.float32), np.full(5, 5.0), 0, 2, 0.8, 0.99, False,
+                        250, 1_800_000, 2.0, 5.0, 30.0)
+    et, pnl, tp, im, sd, ex, en, tpp = r
+    assert len(pnl) >= 1 and en[0] == 997 and sd[0] == 1 and et[0] == 2100
+    assert not im[0]
