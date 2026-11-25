@@ -504,3 +504,23 @@ and the 1-second loop together.
 - **Simplifications:** cancels act after the next trade at or after the decision second
   (+250 ms), never between trades; the models are trained on M0 trips, not on the policy's own
   trips; the order book is not used (stage OB data will add book features later, 6 coins).
+
+## Stage N: stage M plus market-wide co-movement features (2026-11-25, before any run)
+Stage M found that adverse selection is complete at the fill, so the quote must be withdrawn
+before the sweep; the trade tape of the coin itself did not see it coming (IC 0.07). Many sweeps
+are market-wide moves spreading across coins. Stage N adds what the other 74 coins are doing.
+
+- **Market series (per second, 2026-04..10):** from every universe coin, the last trade price
+  before each second; the market return = equal-weight mean of the coins' 1-s log returns,
+  accumulated. The coin's own return is included (1/75 of the mean; its own return features
+  are already in the model).
+- **New features at second s, signed by the side as before:** market return over 1, 5, 30,
+  120, 600 s; breadth over 5 and 30 s = (coins up − coins down) / coins with a price; market
+  activity over 5 and 30 s = all coins' trade count in the window / (the last hour's rate × w);
+  the coin's return over 30 s minus the market's.
+- **Everything else is stage M unchanged:** the M0 trips and their rows, the models (ridge
+  cancel model, logistic exit model) with the 25 + 10 features, λ / τ by 2026-07, the grid
+  (c, θ) ∈ {none, 0, 5, 10, 20} × {none, 0.3, 0.5, 0.7} chosen by total PnL on simulated
+  2026-07, test 2026-08..10, the same pass bar; then 2025 only if the test passes.
+- **Also reported:** cancel-model rank IC and decile table with and without the market features
+  (July), exit-model AUC with and without.
