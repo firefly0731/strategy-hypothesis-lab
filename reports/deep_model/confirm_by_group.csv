@@ -1,0 +1,3 @@
+group,size,mean
+tick < 3 bp,3225,24.508978
+tick >= 3 bp,1707,15.236042

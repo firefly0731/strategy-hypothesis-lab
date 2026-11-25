@@ -201,3 +201,22 @@ Reading
   sweep is paid by the reversion after it. The test stopped at 40 bp, the gradient did not.
 - Depths beyond 40 bp were not pre-registered and the 2026 test half has now been seen for
   depth, so a deeper depth must be confirmed on data not used for this choice: the 2025 trips.
+
+## Stage W: deeper quotes (40..160 bp × take-profit f = 1 / 0.5), chosen on 2026, confirmed on 2025
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 43 | Choice on 2026-05..10 | f = 1: 40 / 60 / 80 / 120 / 160 bp = **−2.17 / −0.10 / +0.82 / +4.40 / +13.32 bp** per trip (6,749 trips at 160 bp, 3.3 per coin-day); f = 0.5 worse at every depth (−4.26 .. +2.92). Chosen: 160 bp, f = 1. 160 bp is positive in 5 of 6 months, but the top 5 of 177 days and the top 5 of 75 coins each give 83% of the total; without those coins +3.1 bp | the grid's edge again; profit comes from a few sweeps |
+| 44 | W1, the chosen configuration on 2025-05..11 (67 coins) | **+21.3 bp** per trip, 4,932 trips; 99% CI lower −11.2, 95% [−4.97, +38.3]; mean win +151, mean loss −761 bp; 6 of 7 months positive | **fails** the 99% bar, but the sign holds out of sample |
+| 45 | W2, stage E filter fitted on 2026 | 4,435 kept, +22.6 bp, 99% lower −12.1; rank IC 0.27 on 2025 | **fails** |
+
+Reading
+- 2025-10-10 (the market-wide liquidation crash) alone gives 73% of the 2025 total (1,348 trips,
+  +76,279 bp); without 10–11 October +5.2 bp (3,446 trips), without the top 5 days −3.0 bp
+  (both post hoc). The deep quote is a crash catcher: it is paid by rare market-wide sweeps and
+  loses a little on ordinary days, with very large single losses (−761 bp mean loss).
+- The fill assumption (a trade through the price fills the whole quote) is most optimistic
+  exactly on those days (latency, queue, exchange load). A real test needs the order book and
+  liquidation feed of such an event.
+- The universe (tick ≥ 3 bp or spread ≥ 4 bp) selects coins with heavy adverse selection; a
+  deep quote does not need the spread to cover the fee, so liquid coins left out become eligible.
