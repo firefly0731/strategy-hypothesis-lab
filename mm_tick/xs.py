@@ -128,9 +128,10 @@ def simulate_x(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquid
 
 @njit(cache=True)
 def simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, liquidate,
-                    delay, timeout, maker_bp, taker_bp, depth_bp):
+                    delay, timeout, maker_bp, taker_bp, depth_bp, tp_frac=1.0):
     """simulate_x plus (exit_ms, entry_px, tp_px) per trip, prices in ticks. depth_bp > 0 rests the
-    entry quotes ceil(depth_bp * price) ticks behind the touch (never improved)."""
+    entry quotes ceil(depth_bp * price) ticks behind the touch (never improved). tp_frac < 1 puts
+    the take-profit at entry + max(need, ceil(tp_frac x distance to the opposite touch - 1 tick))."""
     n = len(t)
     cap = n // 2 + 1
     ent_t = np.empty(cap, dtype=np.int64)
@@ -188,11 +189,11 @@ def simulate_x_full(t, px, side, u, need_bp_day, start_ms, rule, u_on, exit_u, l
                 nt = max(nt, 1.0)
                 if pos > 0:
                     opp = ask_m - 1.0 if ask_m == ask_m else entry + nt
-                    tp = max(entry + nt, opp)
+                    tp = max(entry + nt, entry + np.ceil(tp_frac * (opp - entry)))
                     tp_imp = ask_m == ask_m and tp < ask_m
                 else:
                     opp = bid_m + 1.0 if bid_m == bid_m else entry - nt
-                    tp = min(entry - nt, opp)
+                    tp = min(entry - nt, entry - np.ceil(tp_frac * (entry - opp)))
                     tp_imp = bid_m == bid_m and tp > bid_m
                 tp_time = ti + delay
                 q_bid = np.nan

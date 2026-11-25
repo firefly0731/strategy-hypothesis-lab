@@ -88,3 +88,16 @@ def test_depth_quote_rests_behind_the_touch_and_needs_a_trade_through():
     et, pnl, tp, im, sd, ex, en, tpp = r
     assert len(pnl) >= 1 and en[0] == 997 and sd[0] == 1 and et[0] == 2100
     assert not im[0]
+
+
+def test_tp_frac_takes_part_of_the_distance_to_the_opposite_touch():
+    from mm_tick.xs import simulate_x_full
+    # same path as above: long at 997, opposite touch 1001 -> f = 1 target 1000, f = 0.5 target
+    # 997 + ceil(0.5 * 3) = 999; need 5 bp is 1 tick, below both
+    t = np.array([1000, 1100, 2000, 2100, 4000], np.int64)
+    px = np.array([1000, 1001, 997, 996, 1001], float)
+    side = np.array([-1, 1, -1, -1, 1], np.int8)
+    args = (t, px, side, np.full(10, 0.5, np.float32), np.full(5, 5.0), 0, 2, 0.8, 0.99, False,
+            250, 1_800_000, 2.0, 5.0, 30.0)
+    assert simulate_x_full(*args)[7][0] == 1000
+    assert simulate_x_full(*args, 0.5)[7][0] == 999

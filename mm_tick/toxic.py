@@ -75,7 +75,7 @@ def window_features(t, lp, side, notional, tau, d) -> dict:
     return f
 
 
-def build_symbol(sym: str, depth_bp: float = 0.0) -> pd.DataFrame | None:
+def build_symbol(sym: str, depth_bp: float = 0.0, tp_frac: float = 1.0) -> pd.DataFrame | None:
     tick = ticks()[sym]
     sim = [m for m in xs.SIM_MONTHS if m in xs.available(sym)]
     if not sim:
@@ -104,7 +104,7 @@ def build_symbol(sym: str, depth_bp: float = 0.0) -> pd.DataFrame | None:
             m = float(mult[a])
             r = xs.simulate_x_full(t[a:b], np.rint(px[a:b] / m), side[a:b], u, need, start_ms,
                                    xs.RULES["hybrid"], 0.8, xs.EXIT_U, False,
-                                   xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP, depth_bp)
+                                   xs.DELAY_MS, xs.TIMEOUT_MS, xs.MAKER_BP, xs.TAKER_BP, depth_bp, tp_frac)
             et, pl, tp, im, sd = r[:5]
             trips.append(pd.DataFrame({"t": et, "pnl_bp": pl.astype(np.float32), "by_tp": tp,
                                        "improved": im, "d": sd, "tick_mult": m}))
@@ -142,10 +142,21 @@ def build_symbol(sym: str, depth_bp: float = 0.0) -> pd.DataFrame | None:
     return df
 
 
-def build(depth_bp: float = 0.0) -> None:
-    """depth 0: the stage P table (with per-symbol parts); depth > 0: stage D, one table per depth."""
-    xs.set_period("main")
+def tag_for(depth_bp: float = 0.0, tp_frac: float = 1.0, period: str = "main") -> str:
+    """'' for the stage P table; _d<k> per depth (stage D); _f<100 f> when tp_frac != 1 and _early
+    for the 2025 period (stage W)."""
     tag = "" if depth_bp == 0 else f"_d{int(depth_bp)}"
+    if tp_frac != 1.0:
+        tag += f"_f{int(round(tp_frac * 100))}"
+    if period != "main":
+        tag += f"_{period}"
+    return tag
+
+
+def build(depth_bp: float = 0.0, tp_frac: float = 1.0, period: str = "main") -> None:
+    """depth 0: the stage P table (with per-symbol parts); depth > 0: stage D/W, one table each."""
+    xs.set_period(period)
+    tag = tag_for(depth_bp, tp_frac, period)
     part = RES / f"toxic_parts{tag}"
     part.mkdir(exist_ok=True)
     for s in pd.read_csv(xs.UNIVERSE)["sym"]:
@@ -153,7 +164,7 @@ def build(depth_bp: float = 0.0) -> None:
         if p.exists():
             continue
         try:
-            d = build_symbol(s, depth_bp)
+            d = build_symbol(s, depth_bp, tp_frac)
         except FileNotFoundError:
             d = None
         if d is not None:
@@ -184,9 +195,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["build"])
     ap.add_argument("--depth", type=float, default=0.0, help="entry quotes this many bp behind the touch")
+    ap.add_argument("--tp-frac", type=float, default=1.0, help="take-profit share of the distance to the touch")
+    ap.add_argument("--period", default="main", choices=sorted(xs.PERIODS))
     a = ap.parse_args(argv)
     logging.basicConfig(level="INFO", format="%(asctime)s %(message)s")
-    build(a.depth)
+    build(a.depth, a.tp_frac, a.period)
 
 
 if __name__ == "__main__":
