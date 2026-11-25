@@ -469,3 +469,38 @@ depth 0 (stage X extension) and never at any depth > 0 or with any exit variant.
   by month; on 2025, PnL by month and tick group.
 - **Simplification (as stage D):** a trade through the price fills the whole minimum-size quote;
   queue position is not modelled. A pass would need a check against the order book (stage OB).
+
+## Stage M: range maker with a profit-target spread and 1-second cancel / exit models (user's specification, 2026-11-25, before any run)
+The user's design: in a range, quote a spread wide enough to cover the fees and the adverse
+selection and still leave ≥ 20 bp expected profit; every cycle, estimate the chance of being
+picked off and cancel the quote or defend the position. Stages E and H tested a filter at the
+fill and a taker cut with the stage X spread; stage M tests the wide spread, the passive defence
+and the 1-second loop together.
+
+- **Quote (M0):** when flat and the band u < 0.8 (stage X), both sides at mid ± h, where
+  2h = need + 20 bp (need = 2 × maker fee + the coin's trailing 10-s markout, as stage X), in
+  ticks rounded away from the mid, never inside the touch. Trade-through fills (stage D rule),
+  250 ms order delay, one unit of inventory. After a fill the take-profit is the other quote,
+  at least entry ± (need + 20 bp) — that is, the spread itself is the exit. 30-min timeout by
+  taker. 2026 period, 75 coins, trade data only.
+- **Cancel model (M1):** every second s, for each side, the stage E style ridge model predicts
+  the net PnL of a fill on that side from 25 trade features at s (stage P/E set without
+  `improved` and `loss7`, direction features signed by the side). A side is quoted only while
+  its prediction ≥ c. Trained on the M0 fills with features at the last second at which a
+  cancel could still have stopped the fill (⌊(fill − 250 ms) / 1 s⌋).
+- **Exit model (M2):** every second while holding, a Bayesian additive logistic model
+  (stage P) gives P(the trip ends in a loss if held) from the same market features plus
+  unrealised PnL, distance to the take-profit and time held. When P > θ the take-profit is
+  moved, passively, to the break-even price (entry ± 2 × maker fee); the 30-min taker timeout
+  stays. Trained on M0 trips at checkpoints 1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1200 s.
+- **Fitting and choice:** models fitted on 2026-05..06, λ (ridge) by 2026-07 MSE and τ
+  (logistic) by 2026-07 log loss; (c, θ) ∈ {none, 0, 5, 10, 20 bp} × {none, 0.3, 0.5, 0.7}
+  chosen by the highest total net PnL on simulated 2026-07; models refitted on 2026-05..07 for
+  the test half 2026-08..10.
+- **Pass (M):** the chosen policy on 2026-08..10: ≥ 2,000 trips, mean > 0 and the day-block
+  99% lower bound > 0. Then 2025-05..11 (models refitted on 2026-05..10) with the same bar.
+  M0 alone and every (c, θ) are always reported, with trips per coin-day, win and loss
+  anatomy, PnL by month and the share of profit in the top 5 days.
+- **Simplifications:** cancels act after the next trade at or after the decision second
+  (+250 ms), never between trades; the models are trained on M0 trips, not on the policy's own
+  trips; the order book is not used (stage OB data will add book features later, 6 coins).
