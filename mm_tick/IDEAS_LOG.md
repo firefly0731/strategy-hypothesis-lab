@@ -187,3 +187,17 @@ Reading
 - The same pattern as stages P and E: the trade tape ranks risk, but not by enough to pay the fees.
   The order book (stage OB, collection started 2026-11-25, bookTicker of 6 coins) is the next
   information set.
+
+## Stage D: quote depth (entry quotes k bp behind the touch, trade-through fills)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 40 | D1, each depth alone, test 2026-08..10 | k = 0 / 5 / 10 / 20 / 40 bp: **−9.38 / −6.96 / −6.36 / −5.63 / −3.45 bp** per trip (40 bp: 99% CI [−5.08, ...], 95% [−4.68, −2.21]); trips per coin-day 181 → 12; every month and both tick groups follow the same order | **fails**, but loss falls monotonically with depth |
+| 41 | D2, stage E filter per depth | 0–20 bp: nothing kept (λ at the grid edge, as in stage E). 40 bp: 20,531 kept, **−1.37 bp** [95% −4.07, +1.27] | **fails** |
+| 42 | Win / loss anatomy | Mean win 2.8 → 30.4 bp, mean loss −91 → −194 bp, win share 87% → 85% from 0 to 40 bp; 40 bp top prediction decile +2.86 bp (≈ 6,300 trips, descriptive) | deeper fills buy a larger reversion |
+
+Reading
+- The first monotone gradient towards zero in the whole MM line: a quote that only fills on a
+  sweep is paid by the reversion after it. The test stopped at 40 bp, the gradient did not.
+- Depths beyond 40 bp were not pre-registered and the 2026 test half has now been seen for
+  depth, so a deeper depth must be confirmed on data not used for this choice: the 2025 trips.
