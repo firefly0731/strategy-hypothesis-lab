@@ -420,3 +420,26 @@ whether to cut now by taker or keep the original exit.
   trips cut and when; the hindsight ceiling (best of holding and cutting at any checkpoint, per
   trip); the policy's PnL by month.
 - **Simplification:** taker fills at the estimated touch for any size (minimum size assumed).
+
+## Stage D: quote depth as a conditional decision (2026-11-25, before any run)
+Stages X..H quoted at the touch (or one tick inside). A quote further from the touch fills less
+often but after larger moves, which may be followed by reversion (stage R measured reversion
+after maker fills at the touch only). Stage D asks whether some depth, alone or chosen by the
+state, pays the fees.
+
+- **Simulation:** stage X primary rules (band u < 0.8, need, hybrid fill rule, 250 ms delay,
+  exit at max(entry + need, touch − 1 tick) passive, 30-min timeout by taker, tick in force),
+  except that the entry quotes rest k_bp behind the touch: bid = last bid − ⌈k_bp·price⌉ ticks,
+  ask = last ask + the same; such a quote is never "improved", so it fills only when a trade
+  goes through its price. k_bp ∈ {0 (the stage X trips), 5, 10, 20, 40} bp. 2026 period, 75 coins.
+- **D1 (each depth alone):** test-half (2026-08..10) mean net PnL per trip and its day-block CI.
+- **D2 (depth with a state filter):** for each k, the stage E model (same 27 features incl.
+  the coin's past loss share, decile bins, λ by July MSE with a May–Jun fit, refit May–Jul) and
+  the rule "quote only if predicted PnL > 0", on the test half.
+- **Pass:** any (k, D1 or D2) with ≥ 2,000 test trips, mean > 0 and the day-block bootstrap
+  lower bound > 0 at 99% (Bonferroni-style for 5 depths × 2 rules). Then: the 2025 trips, and a
+  joint simulation where the depth is chosen per quote.
+- **Always reported:** per k, trips, fill rate per quoted hour, win share, mean win and loss,
+  PnL by month and by tick-size group; the D2 decile table.
+- **Simplification:** a trade through the price fills the whole quote (minimum size); queue
+  position at depth is not modelled.
