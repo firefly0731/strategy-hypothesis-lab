@@ -12,7 +12,7 @@
 # level, so their size does not depend on the range. The range only matters at the hourly snapshot.
 # Measured 2026-11-25 (5 min, 21:00 KST): an alt coin with every stream (depth@100ms) ≈ 40-140 MB/day
 # of gzip; depth@0ms sends 2-3x the depth messages of depth@100ms.
-out_dir = "/Users/quant/MarketData/ob_raw"
+out_dir = "/Users/yjban/MarketData/ob_raw"
 ws_url = "wss://fstream.binance.com/stream"
 rest_url = "https://fapi.binance.com"
 snapshot_limit = 1000

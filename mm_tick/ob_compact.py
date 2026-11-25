@@ -1,6 +1,6 @@
 """Daily compaction of the order-book collector's raw gzip files into parquet (stage OB).
 
-    python -m mm_tick.ob_compact --raw /Users/quant/MarketData/ob_raw --out /Users/quant/MarketData/ob_pq
+    python -m mm_tick.ob_compact --raw /Users/yjban/MarketData/ob_raw --out /Users/yjban/MarketData/ob_pq
     python -m mm_tick.ob_compact ... --delete-raw      # delete a raw .gz only after verification
 
 Only UTC days before today are processed (the collector may still be writing today). Prices are
