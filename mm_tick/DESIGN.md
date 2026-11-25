@@ -443,3 +443,29 @@ state, pays the fees.
   PnL by month and by tick-size group; the D2 decile table.
 - **Simplification:** a trade through the price fills the whole quote (minimum size); queue
   position at depth is not modelled.
+
+## Stage W: deeper quotes, chosen on 2026 and confirmed on 2025 (2026-11-25, before any run)
+Stage D's loss fell monotonically with depth up to 40 bp, the last depth tested. Depths beyond
+it were not pre-registered and the 2026 test half has been seen, so stage W chooses one
+configuration on 2026 and tests only that one on the 2025 trips. 2025 was simulated once at
+depth 0 (stage X extension) and never at any depth > 0 or with any exit variant.
+
+- **Simulation:** stage D (entry quotes k bp behind the touch, trade-through fills, 250 ms
+  delay, 30-min taker timeout, tick in force), with two take-profit rules:
+  f = 1: the stage D exit, max(entry + need, opposite touch at fill − 1 tick), which is about
+  the touch before the sweep; f = 0.5: entry + max(need, half of the distance from entry to
+  that opposite touch), rounded away from entry to a tick: a nearer target that fills more
+  often and gives up half the reversion.
+- **Grid:** k ∈ {40, 60, 80, 120, 160} bp × f ∈ {1, 0.5} = 10 configurations, 75 coins.
+- **Choice (2026 only):** the configuration with the highest mean net PnL per trip over
+  2026-05..10 among those with ≥ 2,000 trips. Every configuration is reported.
+- **W1 (confirm, 2025):** the chosen configuration on 2025-05..11 (2025-04 warm-up, first 7 days
+  of May dropped as for 2026), all coins with data. Pass: ≥ 2,000 trips, mean > 0 and the
+  day-block bootstrap 99% lower bound > 0.
+- **W2 (confirm with the filter, 2025):** the stage E model (same features, decile bins, λ by
+  2026-07 MSE with a 2026-05..06 fit, refit on 2026-05..10) on the chosen configuration's 2026
+  trips; on 2025 quote only where predicted PnL > 0. Same pass bar.
+- **Always reported:** per configuration, trips per coin-day, win share, mean win and loss, PnL
+  by month; on 2025, PnL by month and tick group.
+- **Simplification (as stage D):** a trade through the price fills the whole minimum-size quote;
+  queue position is not modelled. A pass would need a check against the order book (stage OB).
