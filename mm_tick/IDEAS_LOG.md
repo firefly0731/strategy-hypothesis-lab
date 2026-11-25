@@ -220,3 +220,19 @@ Reading
   liquidation feed of such an event.
 - The universe (tick ≥ 3 bp or spread ≥ 4 bp) selects coins with heavy adverse selection; a
   deep quote does not need the spread to cover the fee, so liquid coins left out become eligible.
+
+## Stage M: range maker, 2h = need + 20 bp, 1-second cancel and exit models (user's design)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 46 | M0, the spread alone (2026-05..10, 75 coins) | 637,622 trips (≈ 45 per coin-day), **−9.53 bp**; 69% reach the take-profit at +25.0 bp, 31% time out at −85.9 bp; every month −8.2 .. −10.3 | the 20 bp margin is paid for by the trips that run away |
+| 47 | Cancel model (ridge, 25 trade features at the last second before the fill) | July rank IC 0.07; every prediction negative (−12.6 .. −5.3 bp, deciles calibrated −12.1 .. −7.5), so any c ≥ 0 cancels every quote | **fails**: cannot find fills worth taking |
+| 48 | Exit model (logistic P(loss), passive break-even take-profit) | July AUC 0.68 at 1 s .. 0.80 at 20 min; θ = 0.3: −8.66 bp per trip on 2026-08..10 vs −9.67 (M0), but more trips and a lower total. Chosen on July by total PnL: M0; test −9.67 bp [99% −10.29] | **fails** |
+
+Reading
+- Adverse selection is already in the price one second after the fill: on July trips the exit
+  model flags (p > 0.5 at 1 s), a taker cut then is worth −24 bp against −19 bp for holding,
+  and the gap stays at every checkpoint (descriptive). Defending after the fill cannot work; the
+  money is in not being filled, i.e. predicting the sweep before it hits the quote.
+- The trade tape does not predict that (IC 0.07). Queue depletion and book imbalance at the
+  quote are the standard pre-fill signals; stage OB collects them (6 coins since 2026-11-25).
