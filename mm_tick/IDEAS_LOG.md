@@ -236,3 +236,14 @@ Reading
   money is in not being filled, i.e. predicting the sweep before it hits the quote.
 - The trade tape does not predict that (IC 0.07). Queue depletion and book imbalance at the
   quote are the standard pre-fill signals; stage OB collects them (6 coins since 2026-11-25).
+
+## Stage N: stage M plus market-wide co-movement (75-coin per-second market series)
+
+| # | Test | Result | Verdict |
+|---|---|---|---|
+| 49 | Cancel and exit models with 10 market features (market return 1..600 s, breadth, activity, relative return) | λ again at the grid edge, cancel predictions still all < 0 (no quote survives c ≥ 0); exit θ = 0.3: −8.63 bp vs M −8.66. Chosen on July: M0, test **−9.67 bp** | **fails**, the market series adds nothing to the trade-tape models |
+
+Reading
+- Neither the coin's own tape nor the market's tape tells, one second ahead, which fill will be
+  picked off. The next information set is the order book at the quote (stage OB), collected in
+  full on the Mac mini from 2026-11-25 (mm_tick/collector_macmini.toml).

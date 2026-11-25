@@ -1,0 +1,41 @@
+# Mac mini collector (2026-11-25): every public stream the MM research is expected to need, so that
+# a later stage does not have to start a new collection. Raw files are never deleted by the
+# collector; mm_tick.ob_compact converts each finished UTC day and deletes a raw file only after
+# verification (user decision 2026-11-25).
+#   MM candidates (17): diff depth + REST snapshots, aggTrade, bookTicker, liquidations, mark/index/funding
+#   liquid, small-tick coins (3) and leaders (2): diff depth, aggTrade, liquidations, mark price;
+#     no bookTicker (≈ 1,000 msg/s on BTC/ETH; the touch is rebuilt from depth@100ms)
+# Measured on 2026-11-25 (5 min, 21:00 KST): an alt coin with every stream ≈ 40-140 MB/day of gzip;
+# BTC/ETH with bookTicker ≈ 2 GB/day each.
+out_dir = "/Users/quant/MarketData/ob_raw"
+ws_url = "wss://fstream.binance.com/stream"
+rest_url = "https://fapi.binance.com"
+snapshot_limit = 1000
+snapshot_every_s = 3600
+reconnect_every_s = 82800
+retention_days = 0
+min_free_gb = 100
+
+[symbols]
+JCTUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+TAUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+GTCUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+WLDUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+AIOTUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+PUMPUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+CHZUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+XVGUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+ARUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+ORDIUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+TRADOORUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+SANDUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+WIFUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+FLOCKUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+MONUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+IDOLUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+ADAUSDT = ["depth@100ms", "aggTrade", "bookTicker", "forceOrder", "markPrice@1s"]
+SOLUSDT = ["depth@100ms", "aggTrade", "forceOrder", "markPrice@1s"]
+XRPUSDT = ["depth@100ms", "aggTrade", "forceOrder", "markPrice@1s"]
+DOGEUSDT = ["depth@100ms", "aggTrade", "forceOrder", "markPrice@1s"]
+BTCUSDT = ["depth@100ms", "aggTrade", "forceOrder", "markPrice@1s"]
+ETHUSDT = ["depth@100ms", "aggTrade", "forceOrder", "markPrice@1s"]
