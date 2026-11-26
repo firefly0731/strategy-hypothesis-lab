@@ -1,0 +1,40 @@
+<section id="cpcv-result">
+<p class="eyebrow">검증 결과 · CPCV</p>
+<h2>표본 밖에서도 Sharpe 약 1. 단, 세부 규칙 고르기는 동전 던지기</h2>
+<svg width="1664" height="300" viewBox="0 0 1664 300" style="display:block">
+  <line x1="300" y1="30" x2="300" y2="262" stroke="#BFC8D6" stroke-width="2"/>
+  <line x1="771" y1="30" x2="771" y2="262" stroke="#BFC8D6" stroke-width="2" stroke-dasharray="6 6"/>
+  <line x1="1243" y1="30" x2="1243" y2="262" stroke="#BFC8D6" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="300" y="292" font-size="24" fill="#4A5568" text-anchor="middle">Sharpe 0</text>
+  <text x="771" y="292" font-size="24" fill="#4A5568" text-anchor="middle">0.5</text>
+  <text x="1243" y="292" font-size="24" fill="#4A5568" text-anchor="middle">1.0</text>
+
+  <text x="0" y="96" font-size="30" font-weight="700" fill="#14213D">BTC·ETH·SOL</text>
+  <text x="0" y="132" font-size="24" fill="#4A5568">규칙을 만든 코인</text>
+  <line x1="1166" y1="100" x2="1448" y2="100" stroke="#E07A1F" stroke-width="4"/>
+  <g fill="#E07A1F" fill-opacity="0.75">
+    <circle cx="1166" cy="100" r="12"/><circle cx="1242" cy="100" r="12"/><circle cx="1260" cy="100" r="12"/>
+    <circle cx="1284" cy="100" r="12"/><circle cx="1304" cy="100" r="12"/><circle cx="1305" cy="100" r="12"/>
+    <circle cx="1323" cy="100" r="12"/><circle cx="1361" cy="100" r="12"/><circle cx="1448" cy="100" r="12"/>
+  </g>
+  <text x="1307" y="62" font-size="32" font-weight="700" fill="#E07A1F" text-anchor="middle" font-family="Space Grotesk, Arial">0.92 – 1.22</text>
+
+  <text x="0" y="216" font-size="30" font-weight="700" fill="#14213D">BNB·XRP·DOGE</text>
+  <text x="0" y="252" font-size="24" fill="#4A5568">검증용 코인</text>
+  <line x1="404" y1="220" x2="599" y2="220" stroke="#8A93A3" stroke-width="4"/>
+  <g fill="#8A93A3" fill-opacity="0.75">
+    <circle cx="404" cy="220" r="12"/><circle cx="404" cy="220" r="12"/><circle cx="411" cy="220" r="12"/>
+    <circle cx="463" cy="220" r="12"/><circle cx="485" cy="220" r="12"/><circle cx="532" cy="220" r="12"/>
+    <circle cx="550" cy="220" r="12"/><circle cx="596" cy="220" r="12"/><circle cx="599" cy="220" r="12"/>
+  </g>
+  <text x="501" y="182" font-size="32" font-weight="700" fill="#4A5568" text-anchor="middle" font-family="Space Grotesk, Arial">0.11 – 0.32</text>
+  <text x="1664" y="216" font-size="24" fill="#4A5568" text-anchor="end">점 하나 = 표본 밖 6년 경로 하나 (9개)</text>
+</svg>
+<div class="row" style="margin-top:40px">
+<div class="stat" style="--i:1"><p class="mnum acc">53%</p><p class="label">PBO. 학습 1등이 시험에서 중간 아래로 떨어진 비율. 후보 20개가 모두 Sharpe 0.90–1.22로 비슷해 1등이 자주 바뀐다</p></div>
+<div class="stat k" style="--i:2"><p class="mnum">1.21 → 1.01</p><p class="label">학습 구간 Sharpe → 시험 구간 Sharpe (45개 분할 평균). 규칙을 고르면서 생긴 부풀림 약 0.2</p></div>
+<div class="stat k" style="--i:3"><p class="mnum">24 / 45</p><p class="label">지금 쓰는 규칙(14:00 마감 · VWAP 0.6σ)이 학습 1등으로 뽑힌 횟수. 38분할이 14:00 마감을 골랐다</p></div>
+</div>
+<p class="foot">N=10, k=2, 엠바고 30일, 후보 20개(진입 마감 5 × VWAP 기준 4). 2021-02 ~ 2026-10, 1,423세션, maker_chase, 수수료·펀딩비 반영. 1배 고정 크기라 표지 Sharpe 1.43(변동성 목표 포함)과 직접 비교하지 않는다</p>
+<aside>CPCV 결과입니다. 점 하나가 규칙 선택에 한 번도 쓰이지 않은 6년치 경로 하나입니다. 규칙을 만든 BTC·ETH·SOL은 9개 경로가 모두 Sharpe 0.92에서 1.22 사이로, 표본 밖에서도 Sharpe 1 안팎이 나옵니다. 반면 검증용 코인은 0.1에서 0.3으로 약합니다. PBO는 53%로, 학습에서 1등 한 규칙이 시험에서는 절반 이상 중간 아래였다는 뜻입니다. 나쁘게 들리지만 이유가 있습니다. 20개 후보가 모두 Sharpe 0.9에서 1.2로 비슷해서 누가 1등인지는 거의 운입니다. 즉 진입 마감 시각이나 VWAP 기준 같은 세부 튜닝은 성과를 더해 주지 못했고, 성과는 전략의 뼈대에서 나옵니다. 규칙을 고르면서 Sharpe가 약 0.2 부풀려졌다는 것도 같은 이야기입니다. 이 표의 Sharpe는 1배 고정 크기 기준이라 표지 숫자와는 계산 방식이 다릅니다.</aside>
+</section>

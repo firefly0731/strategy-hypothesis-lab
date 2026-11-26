@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -24,7 +25,7 @@ import websockets
 
 from .binance_public import AccessRestricted, ws_status
 from .binance_signed import SignedRest, check_key_permissions
-from .config import ACK_ENV, load_config
+from .config import ACK_ENV, ConfigError, load_config
 from .live import LiveTrader, ReconcileError, flatten_account
 from .persistence import RedactFilter
 from .run_paper import App
@@ -123,6 +124,31 @@ def preflight(cfg, rest: SignedRest) -> dict:
     return dict(usdt=usdt, multi_assets=rest.multi_assets())
 
 
+class AlreadyRunning(RuntimeError):
+    """Another live trader holds the lock on this state directory."""
+
+
+def acquire_single_instance(state_dir) -> object:
+    """Exclusive, non-blocking lock on <state_dir>/run_live.lock, held for the life of the process
+    (the OS releases it when the process dies, so a crash never leaves a stale lock).
+    One account, one trader: a second trader on the same state would duplicate orders."""
+    p = Path(state_dir)
+    p.mkdir(parents=True, exist_ok=True)
+    fh = open(p / "run_live.lock", "a+")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as e:
+        fh.close()
+        raise AlreadyRunning(f"another live trader is running on {p} (lock {p / 'run_live.lock'})") from e
+    return fh
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -141,8 +167,14 @@ def main(argv=None):
                         handlers=[logging.StreamHandler(), logging.FileHandler(Path(cfg.log_dir) / "live.log")])
     for h in logging.getLogger().handlers:              # no request signature / listenKey in any log line
         h.addFilter(RedactFilter())
-    rest = SignedRest.from_config(cfg)
     try:
+        rest = SignedRest.from_config(cfg)
+    except (ConfigError, OSError) as e:          # unreadable / bad secrets file: stop, do not restart
+        log.error("secrets: %s", e)
+        raise SystemExit(3)
+    try:
+        if not a.flatten:
+            _lock = acquire_single_instance(cfg.state_dir)  # noqa: F841 - held until the process exits
         if a.flatten:
             from .binance_public import PublicRest
             exch = PublicRest().exchange_info(cfg.symbols)
@@ -154,7 +186,7 @@ def main(argv=None):
     except AccessRestricted as e:
         log.error("%s", e)
         raise SystemExit(2)
-    except (ReconcileError, PermissionError) as e:
+    except (ReconcileError, PermissionError, AlreadyRunning) as e:
         log.error("%s", e)
         raise SystemExit(3)
 

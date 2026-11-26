@@ -4,7 +4,7 @@ Live / paper trading system for the adopted intraday momentum configuration
 (`crypto_intraday_momentum/`, see its README and IDEAS_LOG). The research code is the
 specification. This package reuses it unchanged wherever possible.
 
-**Status: Phase 1 (paper trading) runs on the Windows host. Phase 3 live code (minimum-size test) is built and tested on a fake exchange; it sends orders only with the user's LIVE_MOMENTUM_ACK.** Phase 1
+**Status (2026-11-26): Phase 1 paper trading and Phase 3 live trading (minimum-size test, real orders, user-approved until 2026-12-20) run on the Windows host. Live trading started with the 2026-11-23 session. The host is moving to a Mac mini (`deploy/DEPLOY.md`, macOS section). Current state and open items: `STATUS.md`.** Phase 1
 runs on live public market data with virtual orders (`run_paper.py`, deployment in
 `deploy/DEPLOY.md`). Real order routing (Phase 2, testnet) needs separate approval.
 

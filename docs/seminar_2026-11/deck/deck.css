@@ -1,0 +1,74 @@
+:root {
+  --ink: #14213D;
+  --paper: #F7F6F2;
+  --paper2: #ECEAE3;
+  --soft: #4A5568;
+  --accent: #E07A1F;
+  --blue: #2F6FD0;
+  --dim: #BFC8D6;
+}
+body { font-family: 'Noto Sans KR', Arial, sans-serif; color: var(--ink); }
+section { padding: 128px 128px 160px; background: var(--paper); color: var(--ink); counter-increment: page; }
+section.dark { background: var(--ink); color: var(--paper); }
+section.alt { background: var(--paper2); }
+
+.eyebrow { font-size: 24px; font-weight: 700; color: var(--accent); letter-spacing: 2px; margin: 0 0 16px 0; }
+h1 { font-size: 88px; font-weight: 700; line-height: 1.15; margin: 0; }
+h2 { font-size: 56px; font-weight: 700; line-height: 1.2; margin: 0 0 40px 0; }
+h3 { font-size: 32px; font-weight: 700; line-height: 1.3; margin: 0 0 12px 0; }
+.lead { font-size: 32px; line-height: 1.5; color: var(--soft); margin: 0; }
+.dark .lead { color: var(--dim); }
+.body { font-size: 28px; line-height: 1.5; color: var(--soft); margin: 0; }
+.dark .body { color: var(--dim); }
+.num { font-family: 'Space Grotesk', Arial, sans-serif; font-size: 120px; font-weight: 700; line-height: 1; margin: 0; color: var(--accent); }
+.num.ink { color: var(--ink); }
+.num.blue { color: var(--blue); }
+.num.mid { font-size: 88px; }
+.label { font-size: 26px; line-height: 1.4; color: var(--soft); margin: 8px 0 0 0; }
+.dark .label { color: var(--dim); }
+
+.foot { position: absolute; left: 128px; bottom: 64px; width: 1664px; font-size: 24px; color: var(--soft); margin: 0; }
+.dark .foot { color: var(--dim); }
+
+.row { display: flex; gap: 48px; }
+.stat { flex: 1; border-top: 6px solid var(--accent); padding-top: 24px; }
+.stat.b { border-top-color: var(--blue); }
+.stat.k { border-top-color: var(--ink); }
+.dark .stat.k { border-top-color: var(--paper); }
+
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.card { background: #FFFFFF; border-radius: 16px; padding: 36px 40px; border-left: 8px solid var(--accent); }
+.card.b { border-left-color: var(--blue); }
+.card .k { font-size: 24px; font-weight: 700; color: var(--accent); margin: 0 0 8px 0; }
+.card.b .k { color: var(--blue); }
+.card .v { font-size: 30px; line-height: 1.45; color: var(--ink); margin: 0; }
+
+.chart { position: relative; width: 1664px; }
+.axis { position: absolute; font-size: 24px; color: var(--soft); margin: 0; }
+.val { position: absolute; font-family: 'Space Grotesk', Arial, sans-serif; font-size: 36px; font-weight: 700; margin: 0; text-align: center; }
+.leg { position: absolute; font-size: 28px; font-weight: 700; margin: 0; }
+
+.hbar { position: relative; height: 112px; width: 1664px; }
+.hbar .name { position: absolute; left: 0; top: 20px; width: 560px; font-size: 30px; font-weight: 700; margin: 0; }
+.hbar .sub { position: absolute; left: 0; top: 64px; width: 560px; font-size: 24px; color: var(--soft); margin: 0; }
+.hbar .bv { position: absolute; top: 28px; font-family: 'Space Grotesk', Arial, sans-serif; font-size: 36px; font-weight: 700; margin: 0; }
+
+table.t { width: 1664px; font-size: 28px; color: var(--ink); }
+.verdict { display: inline-block; background: var(--ink); color: var(--paper); font-size: 30px; font-weight: 700; padding: 18px 32px; border-radius: 12px; margin: 32px 0 0 0; }
+
+.cvgrid { display: flex; flex-direction: column; gap: 14px; width: 1664px; }
+.cvrow { display: flex; gap: 8px; align-items: center; height: 56px; }
+.cvlab { width: 136px; font-size: 26px; font-weight: 700; margin: 0; color: var(--ink); }
+.cvc { flex: 1; height: 56px; background: #B8C4D9; border-radius: 6px; display: flex; overflow: hidden; }
+.cvc.te { background: var(--accent); }
+.cvc.em { background: #B8C4D9; }
+.cvc .gap { width: 30%; height: 56px; background: #8A93A3; }
+.cvc .rest { flex: 1; height: 56px; }
+.cvmore { font-size: 28px; color: var(--soft); margin: 0; }
+.cvx { flex: 1; font-size: 24px; color: var(--soft); margin: 0; }
+.lg { flex: 1; font-size: 26px; color: var(--ink); margin: 0; }
+.mnum { font-family: 'Space Grotesk', Arial, sans-serif; font-size: 72px; font-weight: 700; line-height: 1; margin: 0; color: var(--ink); }
+.stat .mnum.acc { color: var(--accent); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.stat, .card, .hbar { animation: rise 500ms ease-out both; animation-delay: calc(var(--i, 0) * 120ms); }

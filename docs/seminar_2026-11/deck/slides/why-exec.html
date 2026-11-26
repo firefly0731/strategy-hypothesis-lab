@@ -1,0 +1,13 @@
+<section id="why-exec">
+<p class="eyebrow">수익원 ③ 체결 방식과 유동성</p>
+<h2>체결 방식 하나로 Sharpe가 1.11 → 1.43</h2>
+<div class="row" style="margin-top:24px">
+<div class="stat" style="--i:1"><p class="num">1.43</p><p class="label">Sharpe · 지정가(maker) 우선 체결<br>연 +29%</p></div>
+<div class="stat b" style="--i:2"><p class="num blue">1.11</p><p class="label">Sharpe · 전부 시장가(taker) 체결<br>연 +21%</p></div>
+<div class="stat k" style="--i:3"><p class="num ink">94%</p><p class="label">진입이 maker로 체결된다는 가정<br>(실거래로 검증 중)</p></div>
+</div>
+<h3 style="margin-top:72px">유동성이 클수록 잘 된다</h3>
+<p class="body" style="width:1664px">거래당 순수익: BTC +10.8bp · ETH +12.6bp · SOL +20.6bp. 거래당 비용은 평균 4.4bp (총 19.1bp → 순 14.7bp). 다른 코인 20개로 넓히면 Sharpe 중앙값이 0.06으로 사라진다. 이 효과는 가장 유동성이 큰 코인에 몰려 있다.</p>
+<p class="foot">운용 구성 백테스트 2021-05 ~ 2026-10. maker 수수료 0.02%, taker 0.05% + 슬리피지 1bp. 코인 확장 결과는 연구 기록 #10</p>
+<aside>하루에 여러 번 사고파는 전략이라 비용이 성과를 크게 좌우합니다. 지정가 주문을 5분 걸어 두고 안 되면 시장가로 바꾸는 방식만으로 Sharpe가 1.11에서 1.43으로 오릅니다. 다만 이 94%라는 지정가 체결률은 백테스트의 가정입니다. 실제로 이만큼 체결되는지가 지금 실거래로 확인하려는 첫 번째 항목입니다. 또 하나, 이 효과는 BTC·ETH·SOL 같은 큰 코인에서만 보입니다.</aside>
+</section>

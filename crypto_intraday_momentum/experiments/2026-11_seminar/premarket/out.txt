@@ -1,0 +1,17 @@
+discovery: 1484 trades in sample, mean net +2.8 bp
+holdout: 1483 trades in sample, mean net -4.0 bp
+
+| hypothesis | futures | set | detail | t |
+|---|---|---|---|---|
+| H1 agree-filter | NQ | discovery | agree n=987 +2.0bp / disagree n=490 +4.2bp | -0.29 |
+| H3 big |gap| | NQ | discovery | top20% n=292 +10.3bp / rest +1.3bp | +0.93 |
+| H1 agree-filter | NQ | holdout | agree n=1018 -5.1bp / disagree n=460 -1.4bp | -0.47 |
+| H3 big |gap| | NQ | holdout | top20% n=291 -18.1bp / rest -0.2bp | -2.01 |
+| H2 fut-breakout trigger | NQ | discovery | events=295 net -9.3bp/day | -0.78 |
+| H2 fut-breakout trigger | NQ | holdout | events=295 net -10.9bp/day | -0.92 |
+| H1 agree-filter | ES | discovery | agree n=981 +3.9bp / disagree n=491 +2.0bp | +0.28 |
+| H3 big |gap| | ES | discovery | top20% n=298 +28.8bp / rest -2.8bp | +2.63 |
+| H1 agree-filter | ES | holdout | agree n=1015 -5.0bp / disagree n=459 -0.0bp | -0.62 |
+| H3 big |gap| | ES | holdout | top20% n=299 -8.5bp / rest -2.0bp | -0.62 |
+| H2 fut-breakout trigger | ES | discovery | events=299 net -10.8bp/day | -0.91 |
+| H2 fut-breakout trigger | ES | holdout | events=299 net -9.1bp/day | -0.75 |

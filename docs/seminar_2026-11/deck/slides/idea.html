@@ -1,0 +1,26 @@
+<section id="idea">
+<p class="eyebrow">한 장 요약</p>
+<h2>평소 움직임의 범위를 벗어나면, 그 방향으로 탄다</h2>
+<div class="chart" style="height:600px">
+<svg aria-label="하루 개념도: 시가에서 시작해 시간이 갈수록 넓어지는 노이즈 밴드, 가격이 위 밴드를 뚫는 지점에서 매수 진입, 16:00에 청산" width="1600" height="500" viewBox="0 0 1600 500" style="position:absolute;left:32px;top:0">
+<polygon points="0,300 100,260 200,243 300,231 400,220 500,211 600,202 700,194 800,187 900,180 1000,174 1100,167 1200,161 1300,156 1400,150 1500,145 1600,140 1600,460 1500,455 1400,450 1300,444 1200,439 1100,433 1000,426 900,420 800,413 700,406 600,398 500,389 400,380 300,369 200,357 100,340 0,300" fill="#E4E1D7"/>
+<polyline points="0,300 100,260 200,243 300,231 400,220 500,211 600,202 700,194 800,187 900,180 1000,174 1100,167 1200,161 1300,156 1400,150 1500,145 1600,140" fill="none" stroke="#8A93A3" stroke-width="3" stroke-dasharray="10 8"/>
+<polyline points="0,300 100,340 200,357 300,369 400,380 500,389 600,398 700,406 800,413 900,420 1000,426 1100,433 1200,439 1300,444 1400,450 1500,455 1600,460" fill="none" stroke="#8A93A3" stroke-width="3" stroke-dasharray="10 8"/>
+<line x1="1108" y1="20" x2="1108" y2="490" stroke="#8A93A3" stroke-width="2" stroke-dasharray="4 6"/>
+<polyline points="0,300 200,302 400,290 600,265 800,225 1000,195 1200,170 1400,150 1600,135" fill="none" stroke="#2F6FD0" stroke-width="4"/>
+<polyline points="0,300 60,285 120,315 180,295 240,330 300,280 360,300 420,260 480,240 540,255 600,215 660,180 720,165 780,150 840,170 900,130 960,120 1020,135 1080,105 1140,95 1200,110 1260,85 1320,90 1380,70 1440,80 1500,60 1560,72 1600,65" fill="none" stroke="#14213D" stroke-width="5" stroke-linejoin="round"/>
+<circle cx="660" cy="180" r="16" fill="#E07A1F"/>
+<circle cx="1600" cy="65" r="16" fill="#14213D"/>
+</svg>
+<p class="leg" style="left:420px;top:120px;width:420px;color:#E07A1F">① 위 밴드 돌파 + VWAP 위 → 매수</p>
+<p class="leg" style="left:1250px;top:20px;width:400px;color:#14213D">③ 16:00 전량 청산</p>
+<p class="leg" style="left:1180px;top:200px;width:460px;color:#2F6FD0">② VWAP 아래로 내려오면 청산</p>
+<p class="axis" style="left:60px;top:400px;width:480px">회색 영역 = 노이즈 밴드<br>(지난 14일 같은 시각의 평균 움직임)</p>
+<p class="axis" style="left:16px;top:510px;width:120px">09:30</p>
+<p class="axis" style="left:600px;top:510px;width:120px">12:00</p>
+<p class="axis" style="left:1040px;top:510px;width:300px">14:00 신규 진입 마감</p>
+<p class="axis" style="left:1580px;top:510px;width:120px">16:00</p>
+</div>
+<p class="foot">개념도이며 실제 가격이 아닙니다. 아래로 뚫으면 매도(숏)로 대칭. 원형: Zarattini, Aziz &amp; Barbon (2024) “Beat the Market” (SPY)</p>
+<aside>회색 띠가 핵심입니다. 지난 14일 동안 같은 시각에 가격이 시가에서 평균 얼마나 움직였는지로 그날의 ‘평소 범위’를 정합니다. 시간이 갈수록 넓어집니다. 가격이 이 범위를 뚫고, VWAP보다도 같은 방향에 있으면 추세가 시작됐다고 보고 따라 탑니다. 틀리면 VWAP이나 밴드 안으로 돌아올 때 바로 나오고, 맞으면 16:00까지 들고 갑니다. 원래 미국 SPY용으로 나온 논문 전략을 암호화폐로 옮긴 것입니다.</aside>
+</section>
