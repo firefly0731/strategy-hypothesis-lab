@@ -140,3 +140,69 @@ def test_market_streams_routed_to_market_endpoint():
     assert is_market_stream("aggTrade") and is_market_stream("kline_1m")
     assert not is_market_stream("bookTicker") and not is_market_stream("depth@100ms")
     assert not is_market_stream("trade")
+
+
+def test_scheduled_rotation_is_make_before_break(tmp_path):
+    """A fake exchange broadcasts one continuous event sequence to every open connection. Scheduled
+    rotations must leave no hole, no duplicate and no depth gap, and must not trigger a resync."""
+    httpd = HTTPServer(("127.0.0.1", 0), Rest)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    clients: set[asyncio.Queue] = set()
+    conns = {"n": 0}
+
+    async def exchange(stop):
+        i = 0
+        while not stop.is_set():
+            i += 1
+            t = 1700000000000 + i
+            for m in (depth(100 + 2 * i, 101 + 2 * i, 99 + 2 * i, t), trade(i, t, i % 2 == 0)):
+                for q in list(clients):
+                    q.put_nowait(json.dumps(m))
+            await asyncio.sleep(0.005)
+
+    async def handler(ws):
+        conns["n"] += 1
+        q = asyncio.Queue()
+        clients.add(q)
+        try:
+            while (m := await q.get()) is not None:      # None: the test is shutting down
+                await ws.send(m)
+        except websockets.ConnectionClosed:
+            pass
+        finally:
+            clients.discard(q)
+
+    async def main():
+        stop = asyncio.Event()
+        async with websockets.serve(handler, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            prod = asyncio.create_task(exchange(stop))
+            cfg = Config(out_dir=str(tmp_path), ws_url=f"ws://127.0.0.1:{port}/stream",
+                         rest_url=f"http://127.0.0.1:{httpd.server_port}",
+                         symbols={"BTCUSDC": ["depth@0ms", "trade"]},
+                         flush_every_s=0.05, stats_every_s=1, snapshot_every_s=3600,
+                         reconnect_every_s=1, handover_overlap_s=0.3)
+            c = Collector(cfg)
+            task = asyncio.create_task(c.run())
+            await asyncio.sleep(4.0)
+            c.stop.set()
+            await task
+            stop.set()
+            await prod
+            for q in list(clients):
+                q.put_nowait(None)
+            return c
+
+    c = asyncio.run(main())
+    httpd.shutdown()
+    assert c.handovers >= 2 and c.reconnects == 0 and conns["n"] == c.handovers + 1
+    assert c.dupes > 0 and not c.seq.gaps
+    lines = gzip.open(next(tmp_path.rglob("btcusdc.gz")), "rt").read().splitlines()
+    stamps = [int(l.split(" ", 1)[0]) for l in lines]
+    assert stamps == sorted(stamps)
+    recs = [json.loads(l.split(" ", 1)[1]) for l in lines]
+    assert sum("lastUpdateId" in r for r in recs) == 1          # only the initial snapshot
+    us = [r["data"]["u"] for r in recs if r.get("data", {}).get("e") == "depthUpdate"]
+    ts = [r["data"]["t"] for r in recs if r.get("data", {}).get("e") == "trade"]
+    assert us == list(range(us[0], us[0] + 2 * len(us), 2))      # contiguous, no duplicates
+    assert ts == list(range(ts[0], ts[0] + len(ts)))

@@ -56,6 +56,10 @@ class Config:
     snapshot_limit: int = 1000            # /fapi/v1/depth limit (weight 20 at 1000)
     snapshot_every_s: int = 3600          # periodic resync snapshot even without gaps
     reconnect_every_s: int = 23 * 3600    # Binance drops connections after 24h
+    # scheduled reconnects are make-before-break: the new connection is opened and buffered for
+    # this long while the old one keeps being written, then the old one is closed and duplicates
+    # (by event id) are dropped, so the rotation leaves no hole and needs no book resync
+    handover_overlap_s: float = 3.0
     flush_every_s: float = 1.0
     stats_every_s: int = 60
     max_streams_per_conn: int = 150       # Binance limit is 200 per connection
@@ -126,6 +130,12 @@ def is_market_stream(stream: str) -> bool:
     return stream.startswith(MARKET_STREAMS)
 
 
+# event type -> field that increases strictly per (symbol, event type); used to drop the duplicates
+# two overlapping connections deliver during a handover
+SEQ_FIELD = {"depthUpdate": "u", "aggTrade": "a", "trade": "t", "bookTicker": "u",
+             "markPriceUpdate": "E", "forceOrder": "E"}
+
+
 # ----------------------------------------------------------------------------- depth sequence
 
 class DepthSequencer:
@@ -185,6 +195,11 @@ class Collector:
         self.msgs = defaultdict(int)
         self.lat_ms = defaultdict(list)          # local receive - exchange event time, sampled
         self.reconnects = 0
+        self.handovers = 0
+        self.dupes = 0
+        self.hwm: dict[tuple[str, str], int] = {}  # (symbol, event type) -> last written SEQ_FIELD value
+        self._last_ts = 0                          # keeps receive stamps non-decreasing in the files
+        self._bg: set[asyncio.Task] = set()
         self.stop = asyncio.Event()
         self.snapshot_q: asyncio.Queue[str] = asyncio.Queue()
 
@@ -229,36 +244,121 @@ class Collector:
         base = self.cfg.ws_market_url if market else self.cfg.ws_url
         url = f"{base}?streams={'/'.join(streams)}"
         backoff = 1.0
-        while not self.stop.is_set():
+        ws = None
+        try:
+            while not self.stop.is_set():
+                try:
+                    if ws is None:
+                        ws = await self._connect(url)
+                        log.info("connected: %d streams", len(streams))
+                        backoff = 1.0
+                        for s in self._depth_symbols(group, market):      # resync books after a cold connect
+                            self.seq.reset(s)
+                            await self.snapshot_q.put(s)
+                    ws = await self._pump(ws, url, len(streams))
+                    if ws is not None or self.stop.is_set():
+                        continue                                  # handed over to a new connection
+                except Exception as e:                            # noqa: BLE001
+                    log.warning("connection error: %r", e)
+                    if ws is not None:
+                        self._close_later(ws)
+                    ws = None
+                if self.stop.is_set():
+                    break
+                self.reconnects += 1
+                delay = min(backoff, 60) * (1 + random.random() * 0.2)
+                log.info("reconnecting in %.1fs", delay)
+                await asyncio.sleep(delay)
+                backoff *= 2
+        finally:
+            if ws is not None:
+                try:
+                    await asyncio.wait_for(ws.close(), timeout=2)
+                except BaseException:                             # noqa: BLE001  shutting down anyway
+                    pass
+
+    async def _connect(self, url: str):
+        return await websockets.connect(url, max_size=2 ** 24, ping_interval=None, open_timeout=10)
+
+    def _close_later(self, ws) -> None:
+        """Close in the background so the close handshake (up to 10 s) never blocks reading."""
+        async def close():
             try:
-                async with websockets.connect(url, max_size=2 ** 24, ping_interval=None,
-                                              open_timeout=10) as ws:
-                    log.info("connected: %d streams", len(streams))
-                    backoff = 1.0
-                    for s in self._depth_symbols(group, market):          # resync books after (re)connect
-                        self.seq.reset(s)
-                        await self.snapshot_q.put(s)
-                    t_open = time.monotonic()
-                    while not self.stop.is_set():
-                        if time.monotonic() - t_open > self.cfg.reconnect_every_s:
-                            log.info("scheduled reconnect")
-                            break
-                        try:
-                            raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                        except asyncio.TimeoutError:
-                            log.warning("no data for 30s; reconnecting")
-                            break
-                        ts = time.time_ns()                       # stamp before parsing
-                        self._handle(raw, ts)
-            except Exception as e:                                # noqa: BLE001
-                log.warning("connection error: %r", e)
-            if self.stop.is_set():
-                break
-            self.reconnects += 1
-            delay = min(backoff, 60) * (1 + random.random() * 0.2)
-            log.info("reconnecting in %.1fs", delay)
-            await asyncio.sleep(delay)
-            backoff *= 2
+                await ws.close()
+            except Exception:                                     # noqa: BLE001
+                pass
+        t = asyncio.create_task(close())
+        self._bg.add(t)
+        t.add_done_callback(self._bg.discard)
+
+    async def _pump(self, ws, url: str, n_streams: int):
+        """Read `ws` until stop (returns ws), a 30 s silence (closes it, returns None) or the scheduled
+        rotation (returns the new connection). Connection errors propagate."""
+        next_rotation = time.monotonic() + self.cfg.reconnect_every_s
+        while not self.stop.is_set():
+            if time.monotonic() >= next_rotation:
+                log.info("scheduled handover: opening a new connection (%d streams)", n_streams)
+                new = await self._handover(ws, url)
+                if new is not None:
+                    return new
+                next_rotation = time.monotonic() + 60             # keep the old one, retry in a minute
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=30)
+            except asyncio.TimeoutError:
+                log.warning("no data for 30s; reconnecting")
+                self._close_later(ws)
+                return None
+            self._handle(raw, time.time_ns())                     # stamp before parsing
+        return ws
+
+    async def _handover(self, old, url: str):
+        """Make-before-break rotation. Returns the new connection, or None (old one kept) on failure."""
+        try:
+            new = await self._connect(url)
+        except Exception as e:                                    # noqa: BLE001
+            log.warning("handover: new connection failed (%r); keeping the old one", e)
+            return None
+        buf: list[tuple[int, str | bytes]] = []
+
+        async def fill():
+            while True:
+                raw = await new.recv()
+                buf.append((time.time_ns(), raw))
+
+        filler = asyncio.create_task(fill())
+        t_end = time.monotonic() + self.cfg.handover_overlap_s
+        old_alive = True
+        try:
+            while not self.stop.is_set() and not filler.done():
+                left = t_end - time.monotonic()
+                if left <= 0:
+                    break
+                try:
+                    raw = await asyncio.wait_for(old.recv(), timeout=left)
+                except asyncio.TimeoutError:
+                    break
+                except websockets.ConnectionClosed:
+                    log.warning("handover: old connection closed during the overlap")
+                    old_alive = False
+                    break
+                self._handle(raw, time.time_ns())
+        finally:
+            filler.cancel()
+            await asyncio.gather(filler, return_exceptions=True)
+        if not filler.cancelled() and filler.exception() is not None:
+            log.warning("handover: new connection failed during the overlap (%r)", filler.exception())
+            self._close_later(new)
+            if old_alive:
+                return None
+            raise filler.exception()                              # both gone: cold reconnect
+        self._close_later(old)
+        dupes0 = self.dupes
+        for ts, raw in buf:
+            self._handle(raw, ts)
+        self.handovers += 1
+        log.info("handover done: %d msgs buffered on the new connection, %d duplicates dropped",
+                 len(buf), self.dupes - dupes0)
+        return new
 
     def _handle(self, raw: str | bytes, ts: int) -> None:
         if isinstance(raw, bytes):
@@ -273,6 +373,16 @@ class Collector:
         if sym not in self.cfg.symbols:
             return
         kind = stream.split("@", 1)[1] if "@" in stream else data.get("e", "?")
+        f = SEQ_FIELD.get(data.get("e"))
+        v = data.get(f) if f else None
+        if isinstance(v, int):
+            key = (sym, data["e"])
+            if v <= self.hwm.get(key, -1):
+                self.dupes += 1                          # already written from the other connection
+                return
+            self.hwm[key] = v
+        ts = max(ts, self._last_ts)                      # buffered handover messages may be stamped earlier
+        self._last_ts = ts
         self.msgs[f"{sym}@{kind}"] += 1
         if data.get("e") == "depthUpdate" and not self.seq.check(sym, data):
             log.warning("depth gap on %s (pu=%s); requesting snapshot", sym, data.get("pu"))
@@ -329,8 +439,9 @@ class Collector:
             dt = self.cfg.stats_every_s
             rates = {k: round(v / dt, 1) for k, v in sorted(self.msgs.items())}
             lat = {s: round(sorted(v)[len(v) // 2], 1) for s, v in self.lat_ms.items() if v}
-            log.info("msg/s %s | median recv-E latency ms %s | gaps %s | reconnects %d | MB written %s",
-                     rates, lat, dict(self.seq.gaps), self.reconnects,
+            log.info("msg/s %s | median recv-E latency ms %s | gaps %s | reconnects %d | handovers %d | "
+                     "dupes %d | MB written %s",
+                     rates, lat, dict(self.seq.gaps), self.reconnects, self.handovers, self.dupes,
                      {s: round(b / 1e6, 1) for s, b in self.writer.bytes.items()})
             self.msgs.clear()
             self.lat_ms.clear()
@@ -353,6 +464,8 @@ class Collector:
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if self._bg:                                    # background closes of rotated connections
+            await asyncio.wait(self._bg, timeout=2)
         self.writer.close()
         log.info("stopped")
 
