@@ -6,6 +6,9 @@
 - **Moving to a Mac mini.** See `deploy/DEPLOY.md`, section "macOS host". The live trader must run on one host
   only. The next session is 2026-11-30 09:30 NY (23:30 KST). 11/26 is Thanksgiving and 11/27 is an early close,
   which is skipped by design.
+  - Mac mini progress (2026-11-29): checkout `~/live-momentum` (Python 3.14.10, same package versions as
+    Windows), history 2021-01..2026-11-27 cached, tests 134 passed and 0 skipped. Paper smoke run: streams
+    connect, clock offset −4 ms. Waiting on the user's sudo steps and the Windows shutdown.
 - **Live:** `deploy/windows/config.live.toml`.
   - `size_mode = "min"`: every entry at the exchange minimum, about 61 / 23 / 6 USDT for BTC / ETH / SOL.
   - Account about 27.87 USDT. Gross cap 3.5x and daily loss limit 10% (user decision 2026-11-23).

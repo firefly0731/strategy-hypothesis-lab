@@ -83,8 +83,11 @@ Only then re-enable the Windows task. Otherwise `RunAtLoad` restarts the Mac tra
 
 ### 2. Install
 ```bash
-git clone https://github.com/firefly0731/strategy-hypothesis-lab.git ~/strategy-hypothesis-lab
-cd ~/strategy-hypothesis-lab && git checkout feat/live-momentum
+# Use a checkout of its own. On the Mac mini, ~/strategy-hypothesis-lab already serves the market-data collector
+# on another branch, so the trader lives in ~/live-momentum. The launchd jobs run from whichever checkout ran
+# install.sh.
+git clone -b feat/live-momentum https://github.com/firefly0731/strategy-hypothesis-lab.git ~/live-momentum
+cd ~/live-momentum
 python3.14 -m venv .venv          # Windows host: Python 3.14.3, pandas 3.1.1, numpy 2.5.5,
                                   # exchange_calendars 4.13.3, websockets 17.4, pyarrow 26.0.1, requests 2.34.2
 .venv/bin/pip install pandas numpy pyarrow requests exchange_calendars websockets pytest
