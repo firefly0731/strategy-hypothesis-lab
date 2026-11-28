@@ -10,6 +10,7 @@ committed here. The pickles they write (`R_*.pkl`, `IV_*.pkl`, ~35 MB each) are 
 | `cpcv_deck.py OUT SYM`, then `cpcv_deck.py OUT` | CPCV over the IDEAS #5 grid (5 cutoffs × 4 VWAP k), N=10, k=2, embargo 30, 1x unit size. One symbol per process keeps memory low | `R_<SYM>.pkl`, `cpcv.json` |
 | `interval_bt.py OUT SYM`, then `interval_bt.py OUT` | IDEAS #12: decision interval 30 / 15 / 5 min | `IV_<SYM>.pkl`, `interval.json` |
 | `split_bt.py OUT` | IDEAS #13: entries every E min, exits on the 30-min grid. It patches a copy of `run_backtest` in memory and asserts that 30/30 reproduces the production trades exactly. Needs `IV_*.pkl` | `split.json` |
+| `lookback_bt.py OUT SYM`, then `lookback_bt.py OUT` | IDEAS #16: σ lookback 7 / 10 / 14 / 21 / 30 sessions, discovery and hold-out, paired diff vs 14. Asserts that 14 reproduces the stored production trades (`IV_*.pkl`) | `LB_<SYM>.pkl`, `lookback.json` |
 | `split_pair.py OUT` | Paired daily-return t-test of 15/30 vs 30/30 | stdout |
 | `reentry.py OUT` | IDEAS #14: P&L by entry ordinal within a symbol-day, and entry caps. Needs `IV_*.pkl` | stdout |
 | `premarket/` | IDEAS #15 (`study.py`, results in `out.txt`) and side studies for the "premarket" slide: SPY/QQQ (`etf_momo.py`), NQ/ES 24h vs regular hours (`fut_24h.py`), futures signal traded in crypto (`fut_signal_crypto.py`), weekends (`weekend.py`). Yahoo data comes from `fetch*.py` and is not committed | stdout |

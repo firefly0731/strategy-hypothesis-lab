@@ -57,6 +57,20 @@ flat and between sessions, and stop and disable the old host first:
 `Stop-ScheduledTask LiveMomentumLive; Disable-ScheduledTask LiveMomentumLive`. Do the same for
 `LiveMomentumPaper` if the paper trader moves too.
 
+Stopping the task can leave the python child running, and the single-instance lock only covers one host. So on
+Windows also check that no trader is left and revoke the approval token there:
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object CommandLine -match 'run_live|run_paper' |
+  Select-Object ProcessId, CommandLine          # must be empty; Stop-Process -Id <pid> if not
+[Environment]::SetEnvironmentVariable("LIVE_MOMENTUM_ACK", $null, "User")
+```
+Preferably also give the Mac its own API key and delete the Windows key, so the old host cannot trade at all.
+
+**Moving back** to Windows works the same way in reverse. While the account is flat, run
+`sudo live_momentum/deploy/macos/install.sh remove live` on the Mac and delete `live_momentum/runtime/live.ack`.
+Only then re-enable the Windows task. Otherwise `RunAtLoad` restarts the Mac trader at its next boot, and with
+`autorestart 1` that boot can come after a power cut.
+
 ### 1. Host
 - Keep the Mac awake and have it restart after a power cut: `sudo pmset -a sleep 0 disksleep 0 autorestart 1`.
 - Clock: in System Settings → General → Date & Time, turn on "Set time and date automatically". Check it with
@@ -74,12 +88,13 @@ cd ~/strategy-hypothesis-lab && git checkout feat/live-momentum
 python3.14 -m venv .venv          # Windows host: Python 3.14.3, pandas 3.1.1, numpy 2.5.5,
                                   # exchange_calendars 4.13.3, websockets 17.4, pyarrow 26.0.1, requests 2.34.2
 .venv/bin/pip install pandas numpy pyarrow requests exchange_calendars websockets pytest
-PYTHONPATH=. .venv/bin/python -m pytest live_momentum/tests crypto_intraday_momentum/tests -q
 # history archive 2021-01 .. now (~0.8 GB, cached under crypto_intraday_momentum/data_cache)
 PYTHONPATH=. .venv/bin/python -c "from crypto_intraday_momentum.data import load_klines as l, load_funding as f; [(l(s,'2021-01','2026-11'), f(s,'2021-01','2026-11')) for s in ('BTCUSDT','ETHUSDT','SOLUSDT')]"
+PYTHONPATH=. .venv/bin/python -m pytest live_momentum/tests crypto_intraday_momentum/tests -q -rs
 ```
-Keep the package versions close to the Windows host's. The parity tests pin decisions to the backtest, so they must
-all pass.
+Download the history before running the tests. The signal and sizing parity tests are skipped while the cache is
+missing. Expect 134 passed and 0 skipped, as on the Windows host. Keep the package versions close to the Windows
+host's. The parity tests pin decisions to the backtest, so they must all pass.
 
 ### 3. Paper trader and daily report
 ```bash

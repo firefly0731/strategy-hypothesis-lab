@@ -24,6 +24,7 @@ NY, `maker_chase` execution, BTC+ETH+SOL equal weight. The hold-out set is BNB+X
 | 13 | Entries checked every 15 / 5 min, exits/flips only on the 30-min grid (and 5/15) | 5 | Best is 15/30 from 10:00: production SR 1.47, unit SR 1.27 → 1.36. Paired daily diff t 1.73 (unit), 0.04 (production), corr 0.97, yearly t −0.9…+1.4. Inside the selection noise (CPCV inflation ≈ 0.2) | rejected (re-test on live data later) |
 | 14 | Cap on entries per symbol-day (1 / 2) | 2 | 86% of trades are the first entry of the day. Re-entries average +3.5 bp, not losers. Losing days are bad first entries. Cap 1: unit SR 1.27 → 1.36, production 1.43 → 1.41, MDD −16.2% → −19.8%, diff t −0.25 | rejected |
 | 15 | CME index futures (NQ=F, ES=F, Yahoo 60m) as signals: H1 agree-filter, H2 futures-breakout trigger, H3 large overnight gap | 6 | No hypothesis passes both sets. Best is ES H3 on discovery (t +2.63), which reverses on the hold-out (−0.62). NQ H3 on the hold-out is −2.01 | rejected |
+| 16 | σ lookback 7 / 10 / 21 / 30 sessions (paper 14) with the adopted rules (VWAP 0.6σ, 14:00 cutoff, rv24 sizing). Re-check of #3, which predates those rules | 4 | Discovery production SR 1.29 / 1.25 / **1.43 (14)** / 1.38 / 1.35, hold-out 0.24 / 0.04 / **0.27 (14)** / 0.14 / −0.09. No window beats 14 at production sizing in either set (unit hold-out: 7 has SR 0.16 vs 0.10, t +0.49): paired daily diff t (production) −1.25 / −1.91 / −0.39 / −0.28 discovery, −0.33 / −1.64 / −1.54 / −1.58 hold-out. Trades/week 6.6–7.7 | keep 14 |
 
 Seminar re-check (2026-11-24, `experiments/2026-11_seminar/`): CPCV over the #5 grid (N=10, k=2, embargo 30,
 1x unit size, 2021-02..2026-10) gives PBO 0.53 on BTC+ETH+SOL. All 9 OOS paths have SR 0.92–1.22. IS mean 1.21 vs
@@ -35,4 +36,4 @@ sizing choices.
 Correction: an earlier claim that 30-min returns had lag-1 autocorrelation ≈ −0.09 every year was a
 small-sample bias (mean of per-session correlations over 12 pairs). The pooled estimate is −0.04…+0.06.
 
-Total variants tried so far: ~343 (incl. the range research).
+Total variants tried so far: ~347 (incl. the range research).
